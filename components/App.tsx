@@ -1,3 +1,4 @@
+// Painel de métricas KRIVO: raiz da aplicação (abas KRIVO e Clientes).
 "use client";
 import { useRef, useState } from "react";
 import AdminTokenProvider from "./AdminTokenProvider";
