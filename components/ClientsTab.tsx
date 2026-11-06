@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiRead, apiWrite } from "@/lib/api";
 import type { Info, Property } from "@/lib/types";
+import { useMe } from "./AuthGate";
 import ClientForm from "./ClientForm";
 import MetricsView from "./MetricsView";
 import { ErrorBox, Modal } from "./ui";
@@ -9,6 +10,7 @@ import { ErrorBox, Modal } from "./ui";
 type Confirm = { kind: "remove" | "deactivate"; p: Property };
 
 export default function ClientsTab() {
+  const canEdit = useMe().me.role === "admin"; // só esconde botões; quem recusa é o back-end
   const [info, setInfo] = useState<Info | null>(null);
   const [list, setList] = useState<Property[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export default function ClientsTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl">Clientes</h2>
-        <button type="button" className="btn btn-primary w-full sm:w-auto" onClick={() => setForm({})}>Adicionar cliente</button>
+        {canEdit && <button type="button" className="btn btn-primary w-full sm:w-auto" onClick={() => setForm({})}>Adicionar cliente</button>}
       </div>
 
       {info && (
@@ -86,7 +88,7 @@ export default function ClientsTab() {
       {list && list.length === 0 && (
         <div className="card p-8 text-center">
           <p className="text-lg">Nenhum cliente cadastrado ainda</p>
-          <button type="button" className="btn btn-primary mt-4" onClick={() => setForm({})}>Adicionar cliente</button>
+          {canEdit && <button type="button" className="btn btn-primary mt-4" onClick={() => setForm({})}>Adicionar cliente</button>}
         </div>
       )}
 
@@ -105,9 +107,11 @@ export default function ClientsTab() {
               {p.notes && <p className="mt-1 whitespace-pre-line break-words text-sm text-mute">{p.notes}</p>}
               <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button type="button" className="btn" onClick={() => setViewing(p)}>Ver métricas</button>
-                <button type="button" className="btn" onClick={() => setForm({ edit: p })}>Editar</button>
-                <button type="button" className="btn" disabled={busy} onClick={() => (p.active ? (setConfirmErr(null), setConfirm({ kind: "deactivate", p })) : toggle(p))}>{p.active ? "Desativar" : "Ativar"}</button>
-                <button type="button" className="btn btn-danger" onClick={() => { setConfirmErr(null); setConfirm({ kind: "remove", p }); }}>Remover</button>
+                {canEdit && <>
+                  <button type="button" className="btn" onClick={() => setForm({ edit: p })}>Editar</button>
+                  <button type="button" className="btn" disabled={busy} onClick={() => (p.active ? (setConfirmErr(null), setConfirm({ kind: "deactivate", p })) : toggle(p))}>{p.active ? "Desativar" : "Ativar"}</button>
+                  <button type="button" className="btn btn-danger" onClick={() => { setConfirmErr(null); setConfirm({ kind: "remove", p }); }}>Remover</button>
+                </>}
               </div>
               {rowErr?.id === p.id && <p role="alert" className="mt-3 rounded-xl border border-neg/50 p-3 text-neg">{rowErr.message}</p>}
             </li>

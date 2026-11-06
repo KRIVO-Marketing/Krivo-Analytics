@@ -1,5 +1,10 @@
 import App from "@/components/App";
+import AuthGate from "@/components/AuthGate";
 
 export default function Page() {
-  return <App />;
+  return (
+    <AuthGate>
+      <App />
+    </AuthGate>
+  );
 }

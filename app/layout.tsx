@@ -7,6 +7,7 @@ const outfit = Outfit({ subsets: ["latin"], weight: ["300", "400", "500", "600",
 export const metadata: Metadata = {
   title: "KRIVO · Painel de métricas",
   description: "Métricas do Google Analytics 4 da KRIVO e dos clientes.",
+  robots: { index: false, follow: false, nocache: true },
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover" };

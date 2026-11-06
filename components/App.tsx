@@ -1,7 +1,7 @@
 // Painel de métricas KRIVO: raiz da aplicação (abas KRIVO e Clientes).
 "use client";
 import { useRef, useState } from "react";
-import AdminTokenProvider from "./AdminTokenProvider";
+import { useMe } from "./AuthGate";
 import ClientsTab from "./ClientsTab";
 import KrivoTab from "./KrivoTab";
 import Logo from "./Logo";
@@ -9,6 +9,7 @@ import Logo from "./Logo";
 const TABS = [{ id: "krivo", label: "KRIVO" }, { id: "clientes", label: "Clientes" }] as const;
 
 export default function App() {
+  const { me, signOut } = useMe();
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("krivo");
   const [visited, setVisited] = useState({ krivo: true, clientes: false });
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -24,10 +25,16 @@ export default function App() {
   };
 
   return (
-    <AdminTokenProvider>
+    <>
       <header className="brand-band">
         <div className="mx-auto max-w-6xl px-4 py-6 sm:py-10">
-          <Logo className="text-4xl sm:text-5xl" />
+          <div className="flex items-start justify-between gap-3">
+            <Logo className="text-4xl sm:text-5xl" />
+            <div className="flex min-w-0 flex-col items-end gap-1 text-sm sm:flex-row sm:items-center sm:gap-3">
+              <span className="max-w-[12rem] truncate sm:max-w-xs" title={me.email}>{me.email}</span>
+              <button type="button" className="btn" onClick={signOut}>Sair</button>
+            </div>
+          </div>
           <p className="mt-3 text-base font-light sm:text-lg">Criando visibilidade em lucratividade</p>
         </div>
       </header>
@@ -54,6 +61,6 @@ export default function App() {
           <span className="font-light">2026</span>
         </footer>
       </div>
-    </AdminTokenProvider>
+    </>
   );
 }
