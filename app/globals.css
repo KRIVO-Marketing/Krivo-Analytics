@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* Paleta oficial KRIVO: #223862, #626f94, #a4b2d4. Destaque auxiliar arroxeado só para cliques. */
+:root {
+  color-scheme: light dark;
+  --page: #ffffff;
+  --ink: #223862;
+  --mute: #626f94;       /* 5,0:1 sobre branco */
+  --soft: #a4b2d4;
+  --line: color-mix(in srgb, #a4b2d4 60%, transparent);
+  --grid: color-mix(in srgb, #a4b2d4 30%, transparent);
+  --card: #ffffff;
+  --accent: #5560c8;     /* 5,3:1 sobre branco */
+  --accent-soft: color-mix(in srgb, #5560c8 10%, transparent);
+  --btn: #223862;
+  --btn-ink: #ffffff;
+  --pos: #1a7f45;
+  --neg: #b42318;
+  --chart-line: #223862;
+  --focus: #5560c8;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page: #223862;
+    --ink: #ffffff;
+    --mute: #a4b2d4;     /* 6,4:1 sobre #223862 */
+    --soft: #a4b2d4;
+    --line: color-mix(in srgb, #a4b2d4 38%, transparent);
+    --grid: color-mix(in srgb, #a4b2d4 18%, transparent);
+    --card: color-mix(in srgb, #ffffff 4%, transparent);
+    --accent: #c2c7ff;   /* 7,6:1 sobre #223862 */
+    --accent-soft: color-mix(in srgb, #c2c7ff 14%, transparent);
+    --btn: #ffffff;
+    --btn-ink: #223862;
+    --pos: #7ee2a8;
+    --neg: #ffb4a8;
+    --chart-line: #ffffff;
+    --focus: #c2c7ff;
+  }
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-soft: var(--soft);
+  --color-line: var(--line);
+  --color-card: var(--card);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-pos: var(--pos);
+  --color-neg: var(--neg);
+  --font-sans: var(--font-outfit), system-ui, sans-serif;
+}
+
+html { background: var(--page); }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-outfit), system-ui, sans-serif;
+  font-weight: 300;
+  font-variant-numeric: tabular-nums;
+  overflow-x: hidden;
+}
+h1, h2, h3 { font-weight: 400; color: var(--ink); }
+strong, b { font-weight: 600; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+
+@layer components {
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    min-height: 40px; padding: .5rem 1rem; border-radius: 12px;
+    border: 1px solid var(--line); background: transparent; color: var(--ink);
+    font-weight: 400; font-size: .9375rem; cursor: pointer; transition: background .15s;
+  }
+  .btn:hover:not(:disabled) { background: var(--accent-soft); }
+  .btn:disabled { opacity: .55; cursor: not-allowed; }
+  .btn-primary { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); font-weight: 500; }
+  .btn-primary:hover:not(:disabled) { background: var(--btn); opacity: .88; }
+  .btn-danger { color: var(--neg); border-color: color-mix(in srgb, var(--neg) 50%, transparent); }
+  .field { display: block; width: 100%; min-height: 44px; padding: .5rem .75rem; border-radius: 12px;
+    border: 1px solid var(--soft); background: transparent; color: var(--ink); font: inherit; font-weight: 400; }
+  .field::placeholder { color: var(--mute); opacity: .8; }
+  .label { display: block; margin-bottom: .25rem; font-size: .875rem; font-weight: 400; color: var(--ink); }
+  .hint { margin-top: .25rem; font-size: .8125rem; color: var(--mute); }
+  .th { text-align: left; font-weight: 400; font-size: .8125rem; color: var(--mute); padding: .5rem .5rem; border-bottom: 1px solid var(--line); }
+  .td { padding: .625rem .5rem; border-bottom: 1px solid var(--grid); font-size: .9375rem; vertical-align: top; }
+}
+
+/* Faixa do cabeçalho: degradê azul-violeta com grão discreto, longe dos dados. */
+.brand-band {
+  position: relative; isolation: isolate; color: #fff;
+  background: linear-gradient(100deg, #223862 0%, #2c3f82 55%, #4650b4 100%);
+}
+.brand-band::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; opacity: .22; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+@media (prefers-color-scheme: dark) { .brand-band { border-bottom: 1px solid var(--line); } }
+
+.skeleton { background: var(--grid); border-radius: 12px; animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
