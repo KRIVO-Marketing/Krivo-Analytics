@@ -134,16 +134,16 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
             {data ? `${diaMes(data.range.start)} a ${diaMes(data.range.end)} · atualizado às ${hora(data.generated_at)}` : loading ? "Carregando…" : " "}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div role="group" aria-label="Período" className="inline-flex overflow-hidden rounded-xl border border-line">
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <div role="group" aria-label="Período" className="flex w-full overflow-hidden rounded-xl border border-line sm:inline-flex sm:w-auto">
             {PERIODS.map((p) => (
               <button key={p} type="button" aria-pressed={days === p} onClick={() => setDays(p)}
-                className={`min-h-10 px-3 text-sm ${days === p ? "bg-[var(--btn)] font-medium text-[var(--btn-ink)]" : "hover:bg-accent-soft"}`}>
+                className={`min-h-11 flex-1 px-3 text-sm sm:min-h-10 sm:flex-none ${days === p ? "bg-[var(--btn)] font-medium text-[var(--btn-ink)]" : "hover:bg-accent-soft"}`}>
                 {p} dias
               </button>
             ))}
           </div>
-          <button type="button" className="btn" onClick={load} disabled={loading}>Atualizar</button>
+          <button type="button" className="btn w-full sm:w-auto" onClick={load} disabled={loading}>Atualizar</button>
         </div>
       </div>
 
@@ -180,10 +180,10 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
             title="Evolução por dia"
             sub={`Passe o mouse (ou toque) para ver os números de cada dia.`}
             action={
-              <div role="group" aria-label="Métrica do gráfico" className="inline-flex overflow-hidden rounded-xl border border-line text-sm">
+              <div role="group" aria-label="Métrica do gráfico" className="flex w-full overflow-hidden rounded-xl border border-line text-sm sm:inline-flex sm:w-auto">
                 {([["sessions", "Sessões"], ["users", "Visitantes"], ["pageviews", "Páginas vistas"]] as [SeriesKey, string][]).map(([k, l]) => (
                   <button key={k} type="button" aria-pressed={series === k} onClick={() => setSeries(k)}
-                    className={`min-h-9 px-3 ${series === k ? "bg-[var(--btn)] font-medium text-[var(--btn-ink)]" : "hover:bg-accent-soft"}`}>{l}</button>
+                    className={`min-h-11 flex-1 px-2 sm:min-h-9 sm:flex-none sm:px-3 ${series === k ? "bg-[var(--btn)] font-medium text-[var(--btn-ink)]" : "hover:bg-accent-soft"}`}>{l}</button>
                 ))}
               </div>
             }
@@ -200,7 +200,7 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
                   const isCta = f.key === "cta";
                   return (
                     <li key={f.key}>
-                      <div className="mb-1 flex justify-between gap-2 text-sm">
+                      <div className="mb-1 flex flex-wrap justify-between gap-x-2 text-sm">
                         <span>{f.label}</span>
                         <span><b className={isCta ? "text-accent" : ""}>{num(f.users)} pessoas</b> <span className="text-mute">· {dec1(pct)}% dos visitantes</span></span>
                       </div>
@@ -218,8 +218,8 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
             {data.sources.length === 0 ? <p className="text-mute">Sem origens neste período.</p> : (
               <table className="w-full border-collapse">
                 <thead><tr>
-                  <th className="th">Origem</th><th className="th text-right">Sessões</th><th className="th text-right">%</th>
-                  {hasCta && <th className="th text-right text-accent">Cliques no botão</th>}
+                  <th className="th">Origem</th><th className="th text-right">Sessões</th><th className="th hidden text-right sm:table-cell">%</th>
+                  {hasCta && <th className="th text-right text-accent">Cliques<span className="hidden sm:inline"> no botão</span></th>}
                 </tr></thead>
                 <tbody>
                   {data.sources.map((s, i) => {
@@ -232,8 +232,8 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
                             <div className="h-1.5 rounded-r-full bg-soft" style={{ width: `${(s.sessions / maxS) * 100}%` }} />
                           </div>
                         </td>
-                        <td className="td text-right">{num(s.sessions)}</td>
-                        <td className="td text-right">{dec1(s.share)}%</td>
+                        <td className="td text-right">{num(s.sessions)}<span className="block text-xs text-mute sm:hidden">{dec1(s.share)}%</span></td>
+                        <td className="td hidden text-right sm:table-cell">{dec1(s.share)}%</td>
                         {hasCta && <td className="td text-right font-medium text-accent">{s.cta_clicks === null ? "–" : num(s.cta_clicks)}</td>}
                       </tr>
                     );
@@ -246,17 +246,17 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
           <div className="grid gap-4 lg:grid-cols-2">
             <Section title="Páginas mais vistas" sub="O que as pessoas mais abriram no site.">
               <table className="w-full border-collapse">
-                <thead><tr><th className="th">Página</th><th className="th text-right">Vezes aberta</th><th className="th text-right">Visitantes</th></tr></thead>
+                <thead><tr><th className="th">Página</th><th className="th text-right">Vezes aberta</th><th className="th hidden text-right sm:table-cell">Visitantes</th></tr></thead>
                 <tbody>
                   {data.pages.map((p, i) => (
-                    <tr key={i}><td className="td break-all">{pageLabel(p.path)}{pageLabel(p.path) !== p.path && <span className="block text-xs text-mute">{p.path}</span>}</td><td className="td text-right">{num(p.views)}</td><td className="td text-right">{num(p.users)}</td></tr>
+                    <tr key={i}><td className="td break-all">{pageLabel(p.path)}{pageLabel(p.path) !== p.path && <span className="block text-xs text-mute">{p.path}</span>}</td><td className="td text-right">{num(p.views)}<span className="block text-xs text-mute sm:hidden">{num(p.users)} pessoas</span></td><td className="td hidden text-right sm:table-cell">{num(p.users)}</td></tr>
                   ))}
                 </tbody>
               </table>
             </Section>
             <Section title="O que as pessoas fizeram" sub="Ações registradas no site, com o nome técnico em cinza.">
               <table className="w-full border-collapse">
-                <thead><tr><th className="th">Ação</th><th className="th text-right">Vezes</th><th className="th text-right">Visitantes</th></tr></thead>
+                <thead><tr><th className="th">Ação</th><th className="th text-right">Vezes</th><th className="th hidden text-right sm:table-cell">Visitantes</th></tr></thead>
                 <tbody>
                   {data.events.map((ev, i) => {
                     const isCta = !!cta && ev.name === cta;
@@ -267,7 +267,7 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
                           {isCta && <span className="ml-2 rounded-full border border-accent px-2 py-0.5 text-xs text-accent">botão principal</span>}
                           <span className="block text-xs text-mute">{ev.name}{eventInfo(ev.name).hint && !isCta ? ` · ${eventInfo(ev.name).hint}` : ""}</span>
                         </td>
-                        <td className="td text-right">{num(ev.count)}</td><td className="td text-right">{num(ev.users)}</td>
+                        <td className="td text-right">{num(ev.count)}<span className="block text-xs text-mute sm:hidden">{num(ev.users)} pessoas</span></td><td className="td hidden text-right sm:table-cell">{num(ev.users)}</td>
                       </tr>
                     );
                   })}

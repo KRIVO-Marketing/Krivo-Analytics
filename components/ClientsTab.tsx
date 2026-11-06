@@ -59,7 +59,7 @@ export default function ClientsTab() {
   if (viewing) {
     return (
       <div className="space-y-4">
-        <button type="button" className="btn" onClick={() => setViewing(null)}>← Voltar à lista</button>
+        <button type="button" className="btn w-full sm:w-auto" onClick={() => setViewing(null)}>← Voltar à lista</button>
         <MetricsView propertyId={viewing.id} title={viewing.name} />
       </div>
     );
@@ -69,14 +69,14 @@ export default function ClientsTab() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl">Clientes</h2>
-        <button type="button" className="btn btn-primary" onClick={() => setForm({})}>Adicionar cliente</button>
+        <button type="button" className="btn btn-primary w-full sm:w-auto" onClick={() => setForm({})}>Adicionar cliente</button>
       </div>
 
       {info && (
         <div className="card p-4">
           <p>Para liberar a leitura, no Google Analytics do cliente vá em <b>Administrador &gt; Acesso à propriedade</b> e adicione{" "}
             <b className="break-all">{info.service_account_email}</b> com a função <b>Leitor</b>.</p>
-          <button type="button" className="btn mt-3" onClick={copy}>{copied ? "E-mail copiado" : "Copiar e-mail"}</button>
+          <button type="button" className="btn mt-3 w-full sm:w-auto" onClick={copy}>{copied ? "E-mail copiado" : "Copiar e-mail"}</button>
         </div>
       )}
 
@@ -103,7 +103,7 @@ export default function ClientsTab() {
               </div>
               <p className="mt-2 text-sm">Evento do botão: {p.cta_event ? <b className="break-all">{p.cta_event}</b> : <span className="text-mute">não definido</span>}</p>
               {p.notes && <p className="mt-1 whitespace-pre-line break-words text-sm text-mute">{p.notes}</p>}
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button type="button" className="btn" onClick={() => setViewing(p)}>Ver métricas</button>
                 <button type="button" className="btn" onClick={() => setForm({ edit: p })}>Editar</button>
                 <button type="button" className="btn" disabled={busy} onClick={() => (p.active ? (setConfirmErr(null), setConfirm({ kind: "deactivate", p })) : toggle(p))}>{p.active ? "Desativar" : "Ativar"}</button>

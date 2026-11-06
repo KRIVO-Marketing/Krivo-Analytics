@@ -80,12 +80,12 @@ strong, b { font-weight: 600; }
   .btn-primary:hover:not(:disabled) { background: var(--btn); opacity: .88; }
   .btn-danger { color: var(--neg); border-color: color-mix(in srgb, var(--neg) 50%, transparent); }
   .field { display: block; width: 100%; min-height: 44px; padding: .5rem .75rem; border-radius: 12px;
-    border: 1px solid var(--soft); background: transparent; color: var(--ink); font: inherit; font-weight: 400; }
+    border: 1px solid var(--soft); background: transparent; color: var(--ink); font: inherit; font-size: 1rem; font-weight: 400; }
   .field::placeholder { color: var(--mute); opacity: .8; }
   .label { display: block; margin-bottom: .25rem; font-size: .875rem; font-weight: 400; color: var(--ink); }
   .hint { margin-top: .25rem; font-size: .8125rem; color: var(--mute); }
   .th { text-align: left; font-weight: 400; font-size: .8125rem; color: var(--mute); padding: .5rem .5rem; border-bottom: 1px solid var(--line); }
-  .td { padding: .625rem .5rem; border-bottom: 1px solid var(--grid); font-size: .9375rem; vertical-align: top; }
+  .td { padding: .625rem .375rem; border-bottom: 1px solid var(--grid); font-size: .9375rem; vertical-align: top; }
 }
 
 /* Faixa do cabeçalho: degradê azul-violeta com grão discreto, longe dos dados. */

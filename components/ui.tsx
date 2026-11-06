@@ -42,7 +42,7 @@ export function Modal({ title, onClose, children, z = 50 }: { title: string; onC
   }, []);
   return (
     <div className="fixed inset-0 flex items-end justify-center bg-[#223862]/60 p-0 sm:items-center sm:p-4" style={{ zIndex: z }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-line bg-page p-5 sm:rounded-2xl">
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-line bg-page p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:rounded-2xl sm:p-5">
         <h2 className="mb-4 text-xl">{title}</h2>
         {children}
       </div>
