@@ -8,3 +8,10 @@ export const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 /** "2026-10-09" -> "9 out" */
 export const diaMes = (iso: string) => `${Number(iso.slice(8, 10))} ${MESES[Number(iso.slice(5, 7)) - 1]}`;
 export const hora = (iso: string) => new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+export const brl = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+/** "1.500,50" ou "1500.5" -> 1500.5 (NaN se inválido). */
+export const parseBrl = (s: string) => {
+  const t = s.replace(/[R$\s]/g, "");
+  return Number(t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t);
+};

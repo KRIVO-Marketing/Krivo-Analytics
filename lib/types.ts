@@ -29,3 +29,13 @@ export type Metrics = {
   events: { name: string; count: number; users: number }[];
   funnel: { key: string; label: string; users: number }[];
 };
+
+export type Goal = {
+  id: string;
+  title: string;
+  target: number | string;
+  current: number | string;
+  achieved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};

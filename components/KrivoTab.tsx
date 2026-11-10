@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiRead } from "@/lib/api";
 import type { Property } from "@/lib/types";
+import GoalCard from "./GoalCard";
 import MetricsView from "./MetricsView";
 import { ErrorBox } from "./ui";
 
@@ -27,5 +28,10 @@ export default function KrivoTab() {
   if (loading) return <div className="skeleton h-72" aria-busy="true" aria-label="Carregando" />;
   if (error) return <ErrorBox message={error} onRetry={load} />;
   if (!own) return <div className="card p-8 text-center"><p className="text-lg">Nenhuma propriedade da KRIVO encontrada</p></div>;
-  return <MetricsView propertyId={own.id} title="KRIVO" />;
+  return (
+    <div className="space-y-6">
+      <GoalCard />
+      <MetricsView propertyId={own.id} title="KRIVO" />
+    </div>
+  );
 }
