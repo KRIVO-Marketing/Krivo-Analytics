@@ -9,6 +9,7 @@ export default function ClientForm({ initial, onClose, onSaved }: { initial?: Pr
   const [name, setName] = useState(initial?.name ?? "");
   const [pid, setPid] = useState(initial?.property_id ?? "");
   const [cta, setCta] = useState(initial?.cta_event ?? "");
+  const [ctaLabel, setCtaLabel] = useState(initial?.cta_label ?? "");
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -18,10 +19,11 @@ export default function ClientForm({ initial, onClose, onSaved }: { initial?: Pr
     setBusy(true); setErr(null);
     try {
       if (edit) {
-        await apiWrite({ action: "update", id: initial!.id, name, cta_event: cta, notes });
+        await apiWrite({ action: "update", id: initial!.id, name, cta_event: cta, cta_label: ctaLabel, notes });
       } else {
         const body: Record<string, unknown> = { action: "create", name, property_id: pid };
         if (cta.trim()) body.cta_event = cta;
+        if (ctaLabel.trim()) body.cta_label = ctaLabel;
         if (notes.trim()) body.notes = notes;
         await apiWrite(body);
       }
@@ -49,6 +51,11 @@ export default function ClientForm({ initial, onClose, onSaved }: { initial?: Pr
           <label className="label" htmlFor="cf-cta">Evento do botão (opcional)</label>
           <input id="cf-cta" className="field" value={cta} onChange={(e) => setCta(e.target.value)} aria-describedby="cf-cta-h" />
           <p id="cf-cta-h" className="hint">Nome do evento do GA4 que representa o clique que importa, ex.: clique_whatsapp.</p>
+        </div>
+        <div>
+          <label className="label" htmlFor="cf-ctalabel">O que esse botão faz? (opcional)</label>
+          <input id="cf-ctalabel" className="field" maxLength={80} value={ctaLabel} onChange={(e) => setCtaLabel(e.target.value)} aria-describedby="cf-ctalabel-h" />
+          <p id="cf-ctalabel-h" className="hint">É o nome que o cliente vai ver, ex.: Agendar consulta pelo WhatsApp.</p>
         </div>
         <div>
           <label className="label" htmlFor="cf-notes">Observações (opcional)</label>

@@ -103,7 +103,7 @@ export default function ClientsTab() {
                 </div>
                 <span className={`rounded-full border px-3 py-0.5 text-sm ${p.active ? "border-pos text-pos" : "border-line text-mute"}`}>{p.active ? "Ativo" : "Inativo"}</span>
               </div>
-              <p className="mt-2 text-sm">Evento do botão: {p.cta_event ? <b className="break-all">{p.cta_event}</b> : <span className="text-mute">não definido</span>}</p>
+              <p className="mt-2 text-sm">Botão acompanhado: {p.cta_event ? <><b className="break-words">{p.cta_label ?? "sem nome"}</b> <span className="break-all text-mute">({p.cta_event})</span></> : <span className="text-mute">não definido</span>}</p>
               {p.notes && <p className="mt-1 whitespace-pre-line break-words text-sm text-mute">{p.notes}</p>}
               <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <button type="button" className="btn" onClick={() => setViewing(p)}>Ver métricas</button>

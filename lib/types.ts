@@ -4,6 +4,7 @@ export type Property = {
   property_id: string;
   kind: "own" | "client";
   cta_event: string | null;
+  cta_label: string | null;
   notes: string | null;
   active: boolean;
   created_at: string;
@@ -13,7 +14,7 @@ export type Property = {
 export type Info = { service_account_email: string; days_allowed: number[] };
 
 export type Metrics = {
-  property: { id: string; name: string; kind: string; property_id: string; cta_event: string | null };
+  property: { id: string; name: string; kind: string; property_id: string; cta_event: string | null; cta_label: string | null };
   days: number;
   range: { start: string; end: string };
   generated_at: string;

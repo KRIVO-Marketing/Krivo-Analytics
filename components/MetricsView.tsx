@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRead } from "@/lib/api";
 import { dec1, ddmm, diaMes, hora, num } from "@/lib/format";
 import type { Metrics } from "@/lib/types";
+import { buildInsights } from "@/lib/insights";
 import { eventInfo, pageLabel, sourceInfo } from "@/lib/translate";
 import LineChart, { type SeriesKey } from "./LineChart";
 import { ErrorBox } from "./ui";
@@ -63,6 +64,24 @@ function Section({ title, sub, action, children }: { title: string; sub?: string
 }
 
 
+function Insights({ data }: { data: Metrics }) {
+  const items = buildInsights(data);
+  if (items.length === 0) return null;
+  const mark = { good: ["✓", "text-pos", "border-l-pos"], warn: ["!", "text-neg", "border-l-neg"], info: ["i", "text-mute", "border-l-line"] } as const;
+  return (
+    <Section title="O que isso significa" sub="Leitura dos números, em poucas palavras.">
+      <ul className="grid gap-3 lg:grid-cols-2">
+        {items.map((it, i) => (
+          <li key={i} className={`rounded-xl border border-line border-l-4 p-3 ${mark[it.tone][2]}`}>
+            <p className="font-medium"><span aria-hidden className={`mr-2 ${mark[it.tone][1]}`}>{mark[it.tone][0]}</span>{it.title}</p>
+            <p className="mt-1 text-sm text-mute">{it.text}</p>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
 function Summary({ data }: { data: Metrics }) {
   const t = data.totals;
   const top = data.sources[0];
@@ -76,7 +95,7 @@ function Summary({ data }: { data: Metrics }) {
         <li>O site teve <b>{num(t.sessions)} visitas</b> de <b>{num(t.users)} pessoas</b>
           {chg !== null && <>, <b className={chg >= 0 ? "text-pos" : "text-neg"}>{chg >= 0 ? "▲ " : "▼ "}{chg >= 0 ? "+" : "−"}{dec1(Math.abs(chg))}%</b> em relação ao período anterior</>}.</li>
         {t.cta_clicks !== null && t.cta_rate !== null && (
-          <li><b className="text-accent">{num(t.cta_users ?? t.cta_clicks)} {(t.cta_users ?? t.cta_clicks) === 1 ? "pessoa clicou" : "pessoas clicaram"} no botão</b> ({dec1(t.cta_rate)}% dos visitantes).</li>
+          <li><b className="text-accent">{num(t.cta_users ?? t.cta_clicks)} {(t.cta_users ?? t.cta_clicks) === 1 ? "pessoa clicou" : "pessoas clicaram"} {data.property.cta_label ? `em "${data.property.cta_label}"` : "no botão principal"}</b> ({dec1(t.cta_rate)}% dos visitantes).</li>
         )}
         {top && <li>A principal origem foi <b>{sourceInfo(top.source, top.medium).label}</b> ({sourceInfo(top.source, top.medium).detail}), com {dec1(top.share)}% das visitas.</li>}
         {topPage && <li>A página mais aberta foi <b>{pageLabel(topPage.path)}</b>, com {num(topPage.views)} visualizações.</li>}
@@ -160,13 +179,14 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
       {data && !empty && (
         <>
           <Summary data={data} />
+          <Insights data={data} />
 
           <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Sessões" help="Quantas vezes o site foi acessado. A mesma pessoa pode gerar várias." value={num(data.totals.sessions)}><Change v={data.change_pct.sessions} /></StatCard>
             <StatCard label="Visitantes" help="Quantas pessoas diferentes visitaram o site." value={num(data.totals.users)}><Change v={data.change_pct.users} /></StatCard>
             <StatCard label="Visualizações de página" help="Quantas páginas foram abertas, somando todas as visitas." value={num(data.totals.pageviews)}><Change v={data.change_pct.pageviews} /></StatCard>
             {hasCta ? (
-              <StatCard label="Cliques no botão" help={`Pessoas que clicaram no botão principal (${data.totals.cta_users !== null ? num(data.totals.cta_users) + " pessoas" : "evento " + cta}).`} value={num(data.totals.cta_clicks!)} accent>
+              <StatCard label={data.property.cta_label ?? "Cliques no botão"} help={`Pessoas que clicaram${data.property.cta_label ? "" : " no botão principal"} (${data.totals.cta_users !== null ? num(data.totals.cta_users) + " pessoas" : "evento " + cta}). É o clique, não o resultado final.`} value={num(data.totals.cta_clicks!)} accent>
                 <span className="text-sm text-mute">
                   {data.totals.cta_rate !== null && <><b className="text-accent">{dec1(data.totals.cta_rate)}%</b> dos visitantes clicaram</>}
                 </span>
@@ -201,7 +221,7 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
                   return (
                     <li key={f.key}>
                       <div className="mb-1 flex flex-wrap justify-between gap-x-2 text-sm">
-                        <span>{f.label}</span>
+                        <span>{isCta && data.property.cta_label ? `Clicaram em "${data.property.cta_label}"` : f.label}</span>
                         <span><b className={isCta ? "text-accent" : ""}>{num(f.users)} pessoas</b> <span className="text-mute">· {dec1(pct)}% dos visitantes</span></span>
                       </div>
                       <div className="h-3 rounded-r-full bg-[var(--grid)]" aria-hidden>
@@ -263,7 +283,7 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
                     return (
                       <tr key={i} className={isCta ? "bg-accent-soft" : ""}>
                         <td className="td break-all">
-                          <span className={isCta ? "font-medium text-accent" : ""}>{isCta ? "Clique no botão" : eventInfo(ev.name).label}</span>
+                          <span className={isCta ? "font-medium text-accent" : ""}>{isCta ? (data.property.cta_label ?? "Clique no botão") : eventInfo(ev.name).label}</span>
                           {isCta && <span className="ml-2 rounded-full border border-accent px-2 py-0.5 text-xs text-accent">botão principal</span>}
                           <span className="block text-xs text-mute">{ev.name}{eventInfo(ev.name).hint && !isCta ? ` · ${eventInfo(ev.name).hint}` : ""}</span>
                         </td>
