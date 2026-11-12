@@ -3,6 +3,7 @@
 import { getAuth } from "./auth";
 
 export const BASE_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ga4-api";
+export const OPS_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ops-api";
 
 export class ApiError extends Error {
   constructor(message: string, public code: string, public status: number) {
@@ -17,7 +18,7 @@ export function registerAuthHandlers(h: Handlers | null) {
   handlers = h;
 }
 
-async function call<T>(body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+async function call<T>(body: Record<string, unknown>, signal?: AbortSignal, url: string = BASE_URL): Promise<T> {
   const { data } = await getAuth().getSession();
   const token = data.session?.access_token;
   if (!token) {
@@ -27,7 +28,7 @@ async function call<T>(body: Record<string, unknown>, signal?: AbortSignal): Pro
 
   let res: Response;
   try {
-    res = await fetch(BASE_URL, {
+    res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
@@ -56,3 +57,6 @@ async function call<T>(body: Record<string, unknown>, signal?: AbortSignal): Pro
 
 export const apiRead = <T,>(body: Record<string, unknown>, signal?: AbortSignal) => call<T>(body, signal);
 export const apiWrite = <T,>(body: Record<string, unknown>) => call<T>(body);
+
+// Tarefas e CRM (função ops-api)
+export const opsCall = <T,>(body: Record<string, unknown>, signal?: AbortSignal) => call<T>(body, signal, OPS_URL);
