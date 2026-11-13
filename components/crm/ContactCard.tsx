@@ -1,6 +1,7 @@
 "use client";
 import { prefetchContactDetail } from "@/lib/data";
 import { brl, dueInfo, STAGES, stageOf, waLink, type Contact, type Member, type Stage } from "@/lib/ops";
+import { IconMessage, IconPhone } from "../Icons";
 import { Avatar, Pill } from "../opsui";
 
 type Props = {
@@ -65,7 +66,7 @@ export function ContactCard({ c, owner, followUp, onOpen, onQuickStage }: Props)
               title="WhatsApp"
               className="flex flex-1 w-12 items-center justify-center text-accent transition hover:bg-[var(--accent-soft)]"
             >
-              <span aria-hidden className="text-lg">💬</span>
+              <IconMessage size={17} />
             </a>
             <a
               href={`tel:+${c.phone}`}
@@ -73,7 +74,7 @@ export function ContactCard({ c, owner, followUp, onOpen, onQuickStage }: Props)
               title="Ligar"
               className="flex flex-1 w-12 items-center justify-center border-t border-line text-mute transition hover:bg-[var(--accent-soft)] hover:text-ink"
             >
-              <span aria-hidden className="text-base">📞</span>
+              <IconPhone size={16} />
             </a>
           </div>
         )}

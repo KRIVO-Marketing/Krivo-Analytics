@@ -1,5 +1,6 @@
 "use client";
 import { dueInfo, TASK_STATUS, type Member, type Task, type TaskStatus } from "@/lib/ops";
+import { IconUser } from "../Icons";
 import { Avatar } from "../opsui";
 
 type Props = {
@@ -61,7 +62,12 @@ export function TaskCard({ t, assignee, desktop, client, onOpen, onToggle, onSta
                   {due.text}
                 </span>
               )}
-              {client && <span className="rounded-md bg-[var(--grid)] px-1.5 py-0.5 text-mute">👤 {client}</span>}
+              {client && (
+                <span className="inline-flex items-center gap-1 rounded-md bg-[var(--grid)] px-1.5 py-0.5 text-mute">
+                  <IconUser size={12} />
+                  {client}
+                </span>
+              )}
               {t.tags.map((g) => (
                 <span key={g} className="rounded-md bg-[var(--grid)] px-1.5 py-0.5 text-mute">
                   #{g}

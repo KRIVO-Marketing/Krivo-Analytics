@@ -4,15 +4,23 @@ import { buildInsights } from "@/lib/insights";
 import type { Metrics } from "@/lib/types";
 
 export function Change({ v }: { v: number | null | undefined }) {
-  if (v === null || v === undefined) return <span className="text-xs sm:text-sm text-mute">sem comparação</span>;
-  if (v === 0) return <span className="text-xs sm:text-sm text-mute">= 0,0%</span>;
+  if (v === null || v === undefined) return <span className="text-xs text-mute">sem comparação</span>;
+  if (v === 0) return <span className="inline-flex items-center rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs font-medium text-mute">0,0%</span>;
   const up = v > 0;
   return (
-    <span className={`text-xs sm:text-sm font-normal ${up ? "text-pos" : "text-neg"}`}>
-      <span aria-hidden>{up ? "▲" : "▼"} </span>
-      {up ? "+" : "−"}
-      {dec1(Math.abs(v))}%
-      <span className="hidden text-mute sm:inline"> vs. período anterior</span>
+    <span className="inline-flex flex-wrap items-center gap-1.5 text-xs">
+      <span
+        className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 font-medium tabular-nums ${
+          up
+            ? "bg-[color-mix(in_srgb,var(--pos)_14%,transparent)] text-pos"
+            : "bg-[color-mix(in_srgb,var(--neg)_14%,transparent)] text-neg"
+        }`}
+      >
+        <span aria-hidden>{up ? "↑" : "↓"}</span>
+        {up ? "+" : "−"}
+        {dec1(Math.abs(v))}%
+      </span>
+      <span className="hidden text-mute sm:inline">vs. anterior</span>
       <span className="sr-only">{up ? ", alta" : ", queda"}</span>
     </span>
   );
@@ -20,11 +28,11 @@ export function Change({ v }: { v: number | null | undefined }) {
 
 export function StatCard({ label, help, value, children, accent }: { label: string; help: string; value: string; children: React.ReactNode; accent?: boolean }) {
   return (
-    <div className="card flex flex-col justify-between p-3.5 sm:p-4">
+    <div className={`card flex flex-col justify-between p-3.5 sm:p-4 ${accent ? "border-[var(--accent)]/30" : ""}`}>
       <div>
-        <p className="text-xs sm:text-sm font-normal text-mute">{label}</p>
+        <p className="text-xs font-medium text-mute">{label}</p>
         <p className={`mt-1 text-2xl sm:text-3xl font-semibold tracking-tight ${accent ? "text-accent" : ""}`}>{value}</p>
-        <div className="mt-1">{children}</div>
+        <div className="mt-1.5">{children}</div>
       </div>
       <p className="mt-2 hidden text-xs leading-snug text-mute sm:block">{help}</p>
     </div>
