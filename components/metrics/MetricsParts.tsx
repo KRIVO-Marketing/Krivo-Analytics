@@ -5,36 +5,66 @@ import type { Metrics } from "@/lib/types";
 
 export function Change({ v }: { v: number | null | undefined }) {
   if (v === null || v === undefined) return <span className="text-xs text-mute">sem comparação</span>;
-  if (v === 0) return <span className="inline-flex items-center rounded-full bg-[var(--grid)] px-2 py-0.5 text-xs font-medium text-mute">0,0%</span>;
+  if (v === 0) return <span className="inline-flex items-center rounded-full bg-[var(--grid)] px-2.5 py-0.5 text-xs font-medium text-mute">0,0%</span>;
   const up = v > 0;
   return (
-    <span className="inline-flex flex-wrap items-center gap-1.5 text-xs">
-      <span
-        className={`inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 font-medium tabular-nums ${
-          up
-            ? "bg-[color-mix(in_srgb,var(--pos)_14%,transparent)] text-pos"
-            : "bg-[color-mix(in_srgb,var(--neg)_14%,transparent)] text-neg"
-        }`}
-      >
-        <span aria-hidden>{up ? "↑" : "↓"}</span>
-        {up ? "+" : "−"}
-        {dec1(Math.abs(v))}%
-      </span>
-      <span className="hidden text-mute sm:inline">vs. anterior</span>
-      <span className="sr-only">{up ? ", alta" : ", queda"}</span>
+    <span
+      className={`inline-flex items-center gap-0.5 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums ${
+        up ? "bg-[var(--pos-soft)] text-pos" : "bg-[var(--neg-soft)] text-neg"
+      }`}
+    >
+      {up ? "+" : "−"}
+      {dec1(Math.abs(v))}%
+      <span className="sr-only">{up ? ", alta vs. anterior" : ", queda vs. anterior"}</span>
     </span>
   );
 }
 
-export function StatCard({ label, help, value, children, accent }: { label: string; help: string; value: string; children: React.ReactNode; accent?: boolean }) {
+export function StatCard({
+  label,
+  help,
+  value,
+  children,
+  accent,
+  hero,
+  icon,
+}: {
+  label: string;
+  help: string;
+  value: string;
+  children: React.ReactNode;
+  accent?: boolean;
+  hero?: boolean;
+  icon?: React.ReactNode;
+}) {
   return (
-    <div className={`card flex flex-col justify-between p-3.5 sm:p-4 ${accent ? "border-[var(--accent)]/30" : ""}`}>
-      <div>
-        <p className="text-xs font-medium text-mute">{label}</p>
-        <p className={`mt-1 text-2xl sm:text-3xl font-semibold tracking-tight ${accent ? "text-accent" : ""}`}>{value}</p>
-        <div className="mt-1.5">{children}</div>
+    <div className={`${hero ? "card-hero" : "card"} flex flex-col justify-between p-4 sm:p-5`}>
+      <div className="flex items-start justify-between gap-2">
+        <span
+          className={`flex h-9 w-9 items-center justify-center rounded-xl ${
+            hero ? "bg-white/20 text-white" : "bg-[var(--surface-2)] text-ink"
+          }`}
+          aria-hidden
+        >
+          {icon ?? (
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3v18h18" />
+              <path d="m19 9-5 5-4-4-3 3" />
+            </svg>
+          )}
+        </span>
+        <div>{children}</div>
       </div>
-      <p className="mt-2 hidden text-xs leading-snug text-mute sm:block">{help}</p>
+
+      <div className="mt-4">
+        <p className={`text-xs font-medium ${hero ? "text-white/80" : "text-mute"}`}>{label}</p>
+        <div className="mt-1 flex flex-wrap items-baseline justify-between gap-2">
+          <p className={`text-2xl sm:text-3xl font-semibold tracking-tight ${hero ? "text-white" : accent ? "text-accent" : "text-ink"}`}>
+            {value}
+          </p>
+        </div>
+        <p className={`mt-1.5 hidden text-xs leading-snug sm:block ${hero ? "text-white/75" : "text-mute"}`}>{help}</p>
+      </div>
     </div>
   );
 }

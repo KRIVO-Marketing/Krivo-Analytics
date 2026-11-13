@@ -107,8 +107,8 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-dvh place-items-center px-4 py-10">
       <div className="w-full max-w-sm">
-        <Logo className="mb-8 block text-5xl" />
-        {children}
+        <Logo className="mb-6 block text-4xl sm:text-5xl" />
+        <div className="card p-6 sm:p-7">{children}</div>
       </div>
     </div>
   );
