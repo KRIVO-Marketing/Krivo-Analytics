@@ -39,11 +39,18 @@ export type Contact = {
   created_at: string; updated_at: string;
 };
 export type Interaction = { id: string; contact_id: string; kind: string; body: string; created_at: string };
-export type Member = { id: string; email: string };
+export type Member = {
+  id: string;
+  email: string;
+  name?: string;
+  role?: "admin" | "viewer";
+  must_reset_password?: boolean;
+  created_at?: string;
+};
 
 export const stageOf = (id: string) => STAGES.find((s) => s.id === id);
-export const nameOf = (m?: Member | null) => (m ? m.email.split("@")[0] : "");
-export const initial = (m?: Member | null) => (m ? m.email.charAt(0).toUpperCase() : "?");
+export const nameOf = (m?: Member | null) => (m ? (m.name?.trim() || m.email.split("@")[0]) : "");
+export const initial = (m?: Member | null) => (m ? nameOf(m).charAt(0).toUpperCase() || "?" : "?");
 
 // "2026-11-12" -> hoje/amanhã/ontem/12 nov (sem fuso: compara só a data local)
 export function dueInfo(d: string | null): { text: string; late: boolean; soon: boolean } | null {

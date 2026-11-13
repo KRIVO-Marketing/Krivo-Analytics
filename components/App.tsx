@@ -10,9 +10,10 @@ import CrmTab from "./CrmTab";
 import KrivoTab from "./KrivoTab";
 import Logo from "./Logo";
 import TasksTab from "./TasksTab";
+import TeamTab from "./TeamTab";
 import { ThemeToggle } from "./ThemeToggle";
 
-const GROUPS = [
+const BASE_GROUPS = [
   {
     title: "Operação",
     items: [
@@ -29,8 +30,12 @@ const GROUPS = [
   },
 ] as const;
 
-const TABS = [...GROUPS[0].items, ...GROUPS[1].items];
-type TabId = (typeof TABS)[number]["id"];
+const ADMIN_GROUP = {
+  title: "Gestão",
+  items: [{ id: "equipe", label: "Equipe", sub: "Sócios, acessos e redefinição de senha" }],
+} as const;
+
+type TabId = "tarefas" | "crm" | "krivo" | "clientes" | "equipe";
 
 function TabIcon({ id }: { id: TabId }) {
   const props = {
@@ -53,6 +58,8 @@ function TabIcon({ id }: { id: TabId }) {
       return <svg {...props}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></svg>;
     case "clientes":
       return <svg {...props}><path d="M3 3v18h18" /><path d="M8 16v-5M13 16V7M18 16v-8" /></svg>;
+    case "equipe":
+      return <svg {...props}><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" /><path d="M4 21v-1a6 6 0 0 1 12 0v1" /><path d="M19 8v6M22 11h-6" /></svg>;
   }
 }
 
@@ -84,8 +91,11 @@ function useNavCounts() {
 
 export default function App() {
   const { me, signOut } = useMe();
+  const isAdmin = me.role === "admin";
+  const groups = isAdmin ? [...BASE_GROUPS, ADMIN_GROUP] : [...BASE_GROUPS];
+  const tabs = groups.flatMap((g) => [...g.items]);
   const [tab, setTab] = useState<TabId>("tarefas");
-  const [visited, setVisited] = useState<Record<TabId, boolean>>({ tarefas: true, crm: false, krivo: false, clientes: false });
+  const [visited, setVisited] = useState<Record<TabId, boolean>>({ tarefas: true, crm: false, krivo: false, clientes: false, equipe: false });
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const counts = useNavCounts();
 
@@ -97,17 +107,17 @@ export default function App() {
   const onKey = (e: React.KeyboardEvent, i: number) => {
     if (e.key === "ArrowRight" || e.key === "ArrowDown") {
       e.preventDefault();
-      select(TABS[(i + 1) % TABS.length].id);
+      select(tabs[(i + 1) % tabs.length].id);
     }
     if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
       e.preventDefault();
-      select(TABS[(i + TABS.length - 1) % TABS.length].id);
+      select(tabs[(i + tabs.length - 1) % tabs.length].id);
     }
   };
 
-  const activeTab = TABS.find((t) => t.id === tab)!;
+  const activeTab = tabs.find((t) => t.id === tab) ?? tabs[0];
   const badgeFor = (id: TabId) => (id === "tarefas" ? counts.tarefas : id === "crm" ? counts.crm : 0);
-  const initial = (me.email?.[0] ?? "K").toUpperCase();
+  const initial = ((me.name || me.email || "K")[0] ?? "K").toUpperCase();
 
   return (
     <div className="min-h-dvh lg:flex">
@@ -121,7 +131,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 space-y-5 px-3 py-3" aria-label="Navegação principal">
-          {GROUPS.map((group) => (
+          {groups.map((group) => (
             <div key={group.title}>
               <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-wider text-mute/80">
                 {group.title}
@@ -130,7 +140,7 @@ export default function App() {
                 {group.items.map((t) => {
                   const active = tab === t.id;
                   const badge = badgeFor(t.id);
-                  const idx = TABS.findIndex((x) => x.id === t.id);
+                  const idx = tabs.findIndex((x) => x.id === t.id);
                   return (
                     <button
                       key={t.id}
@@ -219,7 +229,7 @@ export default function App() {
                 {initial}
               </span>
               <div className="text-left">
-                <p className="max-w-[11rem] truncate text-xs font-medium text-ink">{me.email}</p>
+                <p className="max-w-[11rem] truncate text-xs font-medium text-ink">{me.name || me.email}</p>
                 <p className="text-[11px] text-mute">{me.role === "admin" ? "Admin" : "Equipe"}</p>
               </div>
             </div>
@@ -231,6 +241,9 @@ export default function App() {
           <div role="tabpanel" id="panel-crm" aria-labelledby="tab-crm" hidden={tab !== "crm"}>{visited.crm && <CrmTab />}</div>
           <div role="tabpanel" id="panel-krivo" aria-labelledby="tab-krivo" hidden={tab !== "krivo"}>{visited.krivo && <KrivoTab />}</div>
           <div role="tabpanel" id="panel-clientes" aria-labelledby="tab-clientes" hidden={tab !== "clientes"}>{visited.clientes && <ClientsTab />}</div>
+          {isAdmin && (
+            <div role="tabpanel" id="panel-equipe" aria-labelledby="tab-equipe" hidden={tab !== "equipe"}>{visited.equipe && <TeamTab />}</div>
+          )}
         </main>
       </div>
 
@@ -238,9 +251,9 @@ export default function App() {
       <div
         role="tablist"
         aria-label="Seções"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+        className={`fixed inset-x-0 bottom-0 z-40 grid ${isAdmin ? "grid-cols-5" : "grid-cols-4"} border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden`}
       >
-        {TABS.map((t, i) => {
+        {tabs.map((t, i) => {
           const active = tab === t.id;
           const badge = badgeFor(t.id);
           return (

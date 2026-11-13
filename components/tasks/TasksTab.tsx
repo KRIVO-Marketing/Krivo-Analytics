@@ -3,10 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { opsCall } from "@/lib/api";
 import { getCached, subscribeCache } from "@/lib/cache";
 import { CACHE_KEYS, fetchContacts, fetchTasks, updateTasksCache } from "@/lib/data";
-import { TASK_STATUS, type Contact, type Task, type TaskStatus } from "@/lib/ops";
+import { nameOf, TASK_STATUS, type Contact, type Task, type TaskStatus } from "@/lib/ops";
 import { useMe } from "../AuthGate";
 import { ChipRow, EmptyState, useTeam } from "../opsui";
 import { ErrorBox } from "../ui";
+import { MentionField } from "./MentionField";
 import { TaskCard } from "./TaskCard";
 import { TaskSheet } from "./TaskSheet";
 
@@ -20,6 +21,9 @@ export default function TasksTab() {
   const [status, setStatus] = useState<TaskStatus>("a_fazer");
   const [mine, setMine] = useState(false);
   const [draft, setDraft] = useState("");
+  const [draftAssignee, setDraftAssignee] = useState<string | null>(null);
+  const [draftContact, setDraftContact] = useState<string | null>(null);
+  const [emailNotice, setEmailNotice] = useState<{ text: string; warn?: boolean } | null>(null);
   const [adding, setAdding] = useState(false);
   const [open, setOpen] = useState<Task | null>(null);
   const [desktop, setDesktop] = useState(false);
@@ -92,11 +96,22 @@ export default function TasksTab() {
     const title = draft.trim();
     if (title.length < 2 || adding) return;
     setAdding(true);
+    setEmailNotice(null);
     try {
-      const r = await opsCall<{ task: Task }>({ action: "task_create", title, status, assignee_id: me.id });
+      const r = await opsCall<{ task: Task; emailSent?: boolean; emailWarning?: string }>({
+        action: "task_create",
+        title,
+        status,
+        assignee_id: draftAssignee ?? me.id,
+        contact_id: draftContact ?? null,
+      });
       updateTasksCache((all) => [r.task, ...all]);
       setDraft("");
+      setDraftAssignee(null);
+      setDraftContact(null);
       setError(null);
+      if (r.emailWarning) setEmailNotice({ text: r.emailWarning, warn: true });
+      else if (r.emailSent) setEmailNotice({ text: "E-mail de notificação enviado ao responsável." });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -110,19 +125,41 @@ export default function TasksTab() {
 
   return (
     <div className="space-y-4">
-      <form onSubmit={add} className="flex gap-2">
-        <input
-          className="field"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          maxLength={120}
-          placeholder={`Nova tarefa em “${activeLabel}”`}
-          aria-label="Título da nova tarefa"
-          enterKeyHint="done"
-        />
-        <button type="submit" className="btn btn-primary shrink-0" disabled={adding || draft.trim().length < 2}>
-          {adding ? "…" : "+ Adicionar"}
-        </button>
+      <form onSubmit={add} className="space-y-2">
+        <div className="flex gap-2">
+          <div className="min-w-0 flex-1">
+            <MentionField
+              value={draft}
+              onChange={setDraft}
+              team={team}
+              contacts={contacts}
+              onPickMember={(m) => setDraftAssignee(m.id)}
+              onPickContact={(c) => setDraftContact(c.id)}
+              maxLength={120}
+              placeholder={`Nova tarefa em “${activeLabel}” (digite @ para atribuir sócio ou cliente)`}
+              ariaLabel="Título da nova tarefa"
+            />
+          </div>
+          <button type="submit" className="btn btn-primary shrink-0" disabled={adding || draft.trim().length < 2}>
+            {adding ? "…" : "+ Adicionar"}
+          </button>
+        </div>
+        {(draftAssignee || draftContact) && (
+          <div className="flex flex-wrap gap-2 text-xs">
+            {draftAssignee && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-2.5 py-1 font-medium text-accent">
+                Responsável: {nameOf(byId.get(draftAssignee))}
+                <button type="button" onClick={() => setDraftAssignee(null)} aria-label="Remover responsável">×</button>
+              </span>
+            )}
+            {draftContact && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--pos)_14%,transparent)] px-2.5 py-1 font-medium text-pos">
+                Cliente: {contactNames.get(draftContact)}
+                <button type="button" onClick={() => setDraftContact(null)} aria-label="Remover cliente">×</button>
+              </span>
+            )}
+          </div>
+        )}
       </form>
 
       <div className="space-y-3">
@@ -151,6 +188,16 @@ export default function TasksTab() {
       </div>
 
       {error && <ErrorBox message={error} onRetry={() => load(true)} />}
+      {emailNotice && (
+        <p
+          role="status"
+          className={`rounded-xl border px-3.5 py-2 text-xs ${
+            emailNotice.warn ? "border-neg/40 text-neg" : "border-line bg-card text-mute"
+          }`}
+        >
+          {emailNotice.text}
+        </p>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-4">
         {TASK_STATUS.map((s) => {
@@ -216,9 +263,11 @@ export default function TasksTab() {
           team={team}
           contacts={contacts}
           onClose={() => setOpen(null)}
-          onSaved={(t) => {
+          onSaved={(t, meta) => {
             updateTasksCache((all) => all.map((x) => (x.id === t.id ? t : x)));
             setOpen(null);
+            if (meta?.emailWarning) setEmailNotice({ text: meta.emailWarning, warn: true });
+            else if (meta?.emailSent) setEmailNotice({ text: "E-mail de notificação enviado ao responsável." });
           }}
           onDeleted={(id) => {
             updateTasksCache((all) => all.filter((x) => x.id !== id));

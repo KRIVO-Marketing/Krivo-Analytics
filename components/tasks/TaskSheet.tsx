@@ -5,13 +5,14 @@ import { nameOf, TASK_STATUS, todayISO, type Contact, type Member, type Task, ty
 import { useMe } from "../AuthGate";
 import { FormError } from "../opsui";
 import { Modal } from "../ui";
+import { MentionField } from "./MentionField";
 
 type Props = {
   task: Task;
   team: Member[];
   contacts: Contact[];
   onClose: () => void;
-  onSaved: (t: Task) => void;
+  onSaved: (t: Task, meta?: { emailSent?: boolean; emailWarning?: string }) => void;
   onDeleted: (id: string) => void;
 };
 
@@ -39,7 +40,7 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
     setBusy(true);
     setErr(null);
     try {
-      const r = await opsCall<{ task: Task }>({
+      const r = await opsCall<{ task: Task; emailSent?: boolean; emailWarning?: string }>({
         action: "task_update",
         id: task.id,
         title,
@@ -50,7 +51,7 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
         tags: tags.split(",").map((x) => x.trim()).filter(Boolean),
         contact_id: contact || null,
       });
-      onSaved(r.task);
+      onSaved(r.task, { emailSent: r.emailSent, emailWarning: r.emailWarning });
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -77,7 +78,18 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
       <form onSubmit={save} className="space-y-4">
         <div>
           <label className="label" htmlFor="t-title">Título</label>
-          <input id="t-title" className="field" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={120} required />
+          <MentionField
+            id="t-title"
+            value={title}
+            onChange={setTitle}
+            team={team}
+            contacts={contacts}
+            onPickMember={(m) => setAssignee(m.id)}
+            onPickContact={(c) => setContact(c.id)}
+            maxLength={120}
+            required
+          />
+          <p className="hint">Digite @ para atribuir um sócio ou vincular um cliente do CRM.</p>
         </div>
         <div>
           <span className="label">Status</span>
@@ -121,7 +133,18 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
         </div>
         <div>
           <label className="label" htmlFor="t-desc">Descrição</label>
-          <textarea id="t-desc" className="field" rows={4} value={desc} onChange={(e) => setDesc(e.target.value)} maxLength={2000} />
+          <MentionField
+            id="t-desc"
+            multiline
+            rows={4}
+            value={desc}
+            onChange={setDesc}
+            team={team}
+            contacts={contacts}
+            onPickMember={(m) => setAssignee(m.id)}
+            onPickContact={(c) => setContact(c.id)}
+            maxLength={2000}
+          />
         </div>
         <div>
           <label className="label" htmlFor="t-cli">Cliente (CRM)</label>
