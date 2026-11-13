@@ -1,7 +1,33 @@
 @import "tailwindcss";
 
-/* Design System KRIVO: Bento Light Airy (#F2F4FA) + Azul Elétrico Royal (#3F51FF) */
+/* Design System KRIVO: Bento Dark confortável (#0F1420) e Light Airy (#F2F4FA) + Azul Royal (#3F51FF). */
 :root {
+  color-scheme: dark;
+  --page: #0f1420;
+  --card: #161d2e;
+  --surface-2: #1e273b;
+  --ink: #f3f6fc;
+  --mute: #94a3b8;
+  --soft: #33415c;
+  --line: rgba(148, 163, 184, 0.14);
+  --grid: rgba(148, 163, 184, 0.08);
+  --accent: #4f6bff;
+  --accent-2: #3b55eb;
+  --accent-soft: rgba(79, 107, 255, 0.16);
+  --btn: #4f6bff;
+  --btn-ink: #ffffff;
+  --pos: #34d399;
+  --pos-soft: rgba(52, 211, 153, 0.14);
+  --neg: #fb7185;
+  --neg-soft: rgba(251, 113, 133, 0.14);
+  --chart-line: #4f6bff;
+  --focus: #4f6bff;
+  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 255, 255, 0.03) inset;
+  --shadow-accent: 0 10px 26px rgba(63, 81, 255, 0.30);
+  --shadow-sheet: 0 -12px 36px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme="light"] {
   color-scheme: light;
   --page: #f2f4fa;
   --card: #ffffff;

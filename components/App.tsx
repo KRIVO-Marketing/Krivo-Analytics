@@ -10,6 +10,7 @@ import CrmTab from "./CrmTab";
 import KrivoTab from "./KrivoTab";
 import Logo from "./Logo";
 import TasksTab from "./TasksTab";
+import { ThemeToggle } from "./ThemeToggle";
 
 const GROUPS = [
   {
@@ -193,13 +194,16 @@ export default function App() {
             <span className="h-3.5 w-px bg-line" aria-hidden />
             <span className="text-sm font-medium text-mute">{activeTab.label}</span>
           </div>
-          <button
-            type="button"
-            onClick={signOut}
-            className="inline-flex h-9 items-center rounded-xl border border-line bg-[var(--surface-2)] px-3 text-xs font-medium text-ink transition hover:border-[var(--neg)]/50 hover:text-neg"
-          >
-            Sair
-          </button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button
+              type="button"
+              onClick={signOut}
+              className="inline-flex h-9 items-center rounded-xl border border-line bg-[var(--surface-2)] px-3 text-xs font-medium text-ink transition hover:border-[var(--neg)]/50 hover:text-neg"
+            >
+              Sair
+            </button>
+          </div>
         </header>
 
         {/* Topbar no Desktop */}
@@ -208,13 +212,16 @@ export default function App() {
             <h1 className="text-2xl font-semibold text-ink">{activeTab.label}</h1>
             <p className="text-xs text-mute">{activeTab.sub}</p>
           </div>
-          <div className="flex items-center gap-2.5 rounded-2xl bg-card px-3 py-1.5 shadow-[var(--shadow-card)]">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-accent">
-              {initial}
-            </span>
-            <div className="text-left">
-              <p className="max-w-[11rem] truncate text-xs font-medium text-ink">{me.email}</p>
-              <p className="text-[11px] text-mute">{me.role === "admin" ? "Admin" : "Equipe"}</p>
+          <div className="flex items-center gap-2.5">
+            <ThemeToggle />
+            <div className="flex items-center gap-2.5 rounded-2xl bg-card px-3 py-1.5 shadow-[var(--shadow-card)]">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent-soft)] text-xs font-semibold text-accent">
+                {initial}
+              </span>
+              <div className="text-left">
+                <p className="max-w-[11rem] truncate text-xs font-medium text-ink">{me.email}</p>
+                <p className="text-[11px] text-mute">{me.role === "admin" ? "Admin" : "Equipe"}</p>
+              </div>
             </div>
           </div>
         </div>
