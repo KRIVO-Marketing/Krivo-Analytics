@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { apiRead, apiWrite } from "@/lib/api";
+import { apiWrite } from "@/lib/api";
+import { getCached } from "@/lib/cache";
+import { CACHE_KEYS, fetchGoals } from "@/lib/data";
 import { brl, parseBrl } from "@/lib/format";
 import type { Goal } from "@/lib/types";
 import { useMe } from "./AuthGate";
@@ -63,28 +65,27 @@ function GoalForm({ mode, goal, onClose, onSaved }: { mode: Exclude<Mode, null>;
 
 export default function GoalCard() {
   const canEdit = useMe().me.role === "admin"; // só esconde botões; quem recusa é o back-end
-  const [goals, setGoals] = useState<Goal[] | null>(null);
+  const [goals, setGoals] = useState<Goal[] | null>(() => getCached<Goal[]>(CACHE_KEYS.goals) ?? null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<Mode>(null);
   const [showPast, setShowPast] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setError(null);
     try {
-      const { goals } = await apiRead<{ goals: Goal[] }>({ action: "goals_list" });
-      setGoals(goals);
+      setGoals(await fetchGoals(force));
     } catch (e) {
       setError((e as Error).message);
     }
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  if (error) return <ErrorBox message={error} onRetry={load} />;
+  if (error) return <ErrorBox message={error} onRetry={() => load(true)} />;
   if (!goals) return <div className="skeleton h-40" aria-busy="true" aria-label="Carregando meta" />;
 
   const goal = goals[0];
   const past = goals.slice(1);
-  const saved = () => { setMode(null); load(); };
+  const saved = () => { setMode(null); load(true); };
 
   if (!goal) {
     return (

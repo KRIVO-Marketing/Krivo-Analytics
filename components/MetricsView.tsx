@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiRead } from "@/lib/api";
+import { getCached } from "@/lib/cache";
+import { CACHE_KEYS, fetchMetrics } from "@/lib/data";
 import { dec1, ddmm, diaMes, hora, num } from "@/lib/format";
 import type { Metrics } from "@/lib/types";
 import { buildInsights } from "@/lib/insights";
@@ -117,19 +118,28 @@ function Summary({ data }: { data: Metrics }) {
 
 export default function MetricsView({ propertyId, title }: { propertyId: string; title?: string }) {
   const [days, setDays] = useState(28);
-  const [data, setData] = useState<Metrics | null>(null);
+  const [data, setData] = useState<Metrics | null>(() => getCached<Metrics>(CACHE_KEYS.metrics(propertyId, 28)) ?? null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => getCached<Metrics>(CACHE_KEYS.metrics(propertyId, 28)) === undefined);
   const [series, setSeries] = useState<SeriesKey>("sessions");
   const ctl = useRef<AbortController | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     ctl.current?.abort();
+    const cached = !force ? getCached<Metrics>(CACHE_KEYS.metrics(propertyId, days)) : undefined;
+    if (cached) {
+      setData(cached);
+      setError(null);
+      setLoading(false);
+      return;
+    }
     const c = new AbortController();
     ctl.current = c;
-    setLoading(true); setError(null); setData(null);
+    setLoading(true);
+    setError(null);
+    if (!force) setData(null);
     try {
-      const m = await apiRead<Metrics>({ action: "metrics", id: propertyId, days }, c.signal);
+      const m = await fetchMetrics(propertyId, days, { force, signal: c.signal });
       if (!c.signal.aborted) setData(m);
     } catch (e) {
       if ((e as Error).name !== "AbortError") setError((e as Error).message);
@@ -162,12 +172,14 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
               </button>
             ))}
           </div>
-          <button type="button" className="btn w-full sm:w-auto" onClick={load} disabled={loading}>Atualizar</button>
+          <button type="button" className="btn w-full sm:w-auto" onClick={() => load(true)} disabled={loading}>
+            {loading && data ? "Atualizando…" : "Atualizar"}
+          </button>
         </div>
       </div>
 
-      {error && <ErrorBox message={error} onRetry={load} />}
-      {loading && !error && <Skeleton />}
+      {error && <ErrorBox message={error} onRetry={() => load(true)} />}
+      {loading && !data && !error && <Skeleton />}
 
       {data && empty && (
         <div className="card p-8 text-center">
