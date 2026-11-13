@@ -140,14 +140,14 @@ export default function LineChart({ daily, series = "sessions" }: { daily: Metri
       </svg>
       {d && (
         <div
-          className="pointer-events-none absolute top-1 z-10 w-42 rounded-xl border border-line bg-page/95 p-2.5 text-xs text-ink shadow-lg backdrop-blur-md"
+          className="pointer-events-none absolute top-1 z-10 w-42 rounded-2xl bg-[#141824] p-3 text-xs text-white shadow-xl"
           style={{ left: tipLeft }}
           role="status"
         >
-          <p className="mb-1.5 font-semibold text-accent">{ddmm(d.date)}</p>
-          <p className="flex justify-between text-mute"><span>Sessões</span><b className="text-ink">{num(d.sessions)}</b></p>
-          <p className="flex justify-between text-mute"><span>Visitantes</span><b className="text-ink">{num(d.users)}</b></p>
-          <p className="flex justify-between text-mute"><span>Páginas vistas</span><b className="text-ink">{num(d.pageviews)}</b></p>
+          <p className="mb-1.5 font-semibold text-[#8fa2ff]">{ddmm(d.date)}</p>
+          <p className="flex justify-between text-white/75"><span>Sessões</span><b className="text-white">{num(d.sessions)}</b></p>
+          <p className="flex justify-between text-white/75"><span>Visitantes</span><b className="text-white">{num(d.users)}</b></p>
+          <p className="flex justify-between text-white/75"><span>Páginas vistas</span><b className="text-white">{num(d.pageviews)}</b></p>
         </div>
       )}
     </div>

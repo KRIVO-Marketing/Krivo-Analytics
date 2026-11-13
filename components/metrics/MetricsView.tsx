@@ -104,54 +104,60 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
 
       {data && !empty && (
         <>
-          <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
-            <StatCard label="Visitantes" help="Pessoas únicas que acessaram o site." value={num(data.totals.users)}>
-              <Change v={data.change_pct.users} />
-            </StatCard>
-            <StatCard label="Sessões" help={`${num(data.totals.pageviews)} visualizações de página no período.`} value={num(data.totals.sessions)}>
-              <Change v={data.change_pct.sessions} />
-            </StatCard>
-            {hasCta ? (
-              <>
-                <StatCard
-                  label={data.property.cta_label ?? "Cliques no botão"}
-                  help={data.totals.cta_users !== null ? `${num(data.totals.cta_users)} pessoas únicas clicaram.` : `Evento ${cta}.`}
-                  value={num(data.totals.cta_clicks!)}
-                  accent
-                >
-                  <span className="text-xs sm:text-sm text-mute">
-                    {data.totals.cta_users !== null ? `${num(data.totals.cta_users)} pessoas` : "cliques"}
-                  </span>
-                </StatCard>
-                <StatCard label="Taxa de conversão" help="De cada 100 visitantes, quantos clicaram no botão principal." value={data.totals.cta_rate !== null ? `${dec1(data.totals.cta_rate)}%` : "–"} accent>
-                  <span className="text-xs sm:text-sm text-mute">dos visitantes</span>
-                </StatCard>
-              </>
-            ) : (
-              <>
-                <StatCard label="Páginas vistas" help="Total de páginas abertas em todas as visitas." value={num(data.totals.pageviews)}>
-                  <Change v={data.change_pct.pageviews} />
-                </StatCard>
-                <div className="card flex items-center p-3.5 sm:p-4">
-                  <p className="text-xs sm:text-sm text-mute">{CTA_HINT}</p>
-                </div>
-              </>
-            )}
+          <div className="grid gap-4 lg:grid-cols-12">
+            <div className="grid grid-cols-2 gap-3 lg:col-span-6">
+              <StatCard label="Visitantes" help="Pessoas únicas que acessaram o site." value={num(data.totals.users)} hero>
+                <Change v={data.change_pct.users} />
+              </StatCard>
+              <StatCard label="Sessões" help={`${num(data.totals.pageviews)} visualizações de página no período.`} value={num(data.totals.sessions)}>
+                <Change v={data.change_pct.sessions} />
+              </StatCard>
+              {hasCta ? (
+                <>
+                  <StatCard
+                    label={data.property.cta_label ?? "Cliques no botão"}
+                    help={data.totals.cta_users !== null ? `${num(data.totals.cta_users)} pessoas únicas clicaram.` : `Evento ${cta}.`}
+                    value={num(data.totals.cta_clicks!)}
+                    accent
+                  >
+                    <span className="rounded-full bg-[var(--accent-soft)] px-2.5 py-0.5 text-xs font-medium text-accent">
+                      {data.totals.cta_users !== null ? `${num(data.totals.cta_users)} pessoas` : "cliques"}
+                    </span>
+                  </StatCard>
+                  <StatCard label="Taxa de conversão" help="De cada 100 visitantes, quantos clicaram no botão principal." value={data.totals.cta_rate !== null ? `${dec1(data.totals.cta_rate)}%` : "–"} accent>
+                    <span className="rounded-full bg-[var(--surface-2)] px-2.5 py-0.5 text-xs font-medium text-mute">dos visitantes</span>
+                  </StatCard>
+                </>
+              ) : (
+                <>
+                  <StatCard label="Páginas vistas" help="Total de páginas abertas em todas as visitas." value={num(data.totals.pageviews)}>
+                    <Change v={data.change_pct.pageviews} />
+                  </StatCard>
+                  <div className="card flex items-center p-4">
+                    <p className="text-xs sm:text-sm text-mute">{CTA_HINT}</p>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="lg:col-span-6">
+              <ChannelBreakdown sources={data.sources} hasCta={hasCta} />
+            </div>
           </div>
 
           <Section
             title="Evolução por dia"
             sub="Passe o mouse (ou toque) para ver os números de cada dia."
             action={
-              <div role="group" aria-label="Métrica do gráfico" className="flex w-full overflow-hidden rounded-xl border border-line text-sm sm:inline-flex sm:w-auto">
+              <div role="group" aria-label="Métrica do gráfico" className="flex w-full overflow-hidden rounded-xl border border-line bg-[var(--surface-2)] p-0.5 text-sm sm:inline-flex sm:w-auto">
                 {([["sessions", "Sessões"], ["users", "Visitantes"], ["pageviews", "Páginas vistas"]] as [SeriesKey, string][]).map(([k, l]) => (
                   <button
                     key={k}
                     type="button"
                     aria-pressed={series === k}
                     onClick={() => setSeries(k)}
-                    className={`min-h-11 flex-1 px-2 sm:min-h-9 sm:flex-none sm:px-3 ${
-                      series === k ? "bg-[var(--btn)] font-medium text-[var(--btn-ink)]" : "hover:bg-accent-soft"
+                    className={`min-h-10 flex-1 rounded-lg px-2.5 text-xs font-medium transition sm:min-h-8 sm:flex-none sm:px-3 ${
+                      series === k ? "bg-[var(--card)] text-ink shadow-sm" : "text-mute hover:text-ink"
                     }`}
                   >
                     {l}
@@ -164,8 +170,6 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
           </Section>
 
           <MetricsDigest data={data} />
-
-          <ChannelBreakdown sources={data.sources} hasCta={hasCta} />
 
           <CampaignBreakdown
             campaigns={data.campaigns ?? []}
