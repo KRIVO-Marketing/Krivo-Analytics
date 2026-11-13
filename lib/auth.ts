@@ -14,4 +14,10 @@ export function getAuth() {
   return client.auth;
 }
 
-export type Me = { id: string; email: string; role: "admin" | "viewer" };
+export type Me = {
+  id: string;
+  email: string;
+  name?: string;
+  role: "admin" | "viewer";
+  must_reset_password?: boolean;
+};

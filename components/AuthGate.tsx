@@ -1,7 +1,7 @@
 // Porta de entrada: nada do painel (nem a árvore de componentes, nem requisições) existe antes do login.
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { registerAuthHandlers } from "@/lib/api";
+import { opsCall, registerAuthHandlers } from "@/lib/api";
 import { getAuth, getSiteUrl, type Me } from "@/lib/auth";
 import { invalidateCache } from "@/lib/cache";
 import { bootstrapApp } from "@/lib/data";
@@ -76,6 +76,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
       if (expectedUserId && loadingUserRef.current !== expectedUserId) return;
       meRef.current = user;
       setMe(user);
+      if (user.must_reset_password) {
+        setView("recovery");
+        return;
+      }
       setView((v) => (v === "recovery" ? v : "panel"));
     } catch {
       /* 401/403 já tratados pelos handlers; outros erros: volta ao login sem expor detalhes */
@@ -90,7 +94,19 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (view === "loading") return <Shell><p className="text-mute" aria-busy="true">Carregando…</p></Shell>;
-  if (view === "recovery") return <NewPassword onDone={() => { setNotice(null); setView("loading"); loadMe(); }} onCancel={signOut} />;
+  if (view === "recovery") {
+    return (
+      <NewPassword
+        firstAccess={Boolean(me?.must_reset_password)}
+        onDone={() => {
+          setNotice(null);
+          setView("loading");
+          loadMe();
+        }}
+        onCancel={signOut}
+      />
+    );
+  }
   if (view === "forbidden") {
     return (
       <Shell>
@@ -172,7 +188,7 @@ function Login({ notice, onClearNotice }: { notice: string | null; onClearNotice
   );
 }
 
-function NewPassword({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
+function NewPassword({ firstAccess = false, onDone, onCancel }: { firstAccess?: boolean; onDone: () => void; onCancel: () => void }) {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
   const [busy, setBusy] = useState(false);
@@ -183,14 +199,27 @@ function NewPassword({ onDone, onCancel }: { onDone: () => void; onCancel: () =>
     if (pw !== pw2) { setError("As senhas não são iguais."); return; }
     setBusy(true); setError(null);
     const { error } = await getAuth().updateUser({ password: pw });
+    if (error) {
+      setBusy(false);
+      setError(error.message || "Não foi possível definir a nova senha. Tente de novo.");
+      return;
+    }
+    try {
+      await opsCall({ action: "password_reset_complete" });
+    } catch {
+      /* segue para o painel; se ainda estiver pendente, próxima carga ajusta */
+    }
     setBusy(false);
-    if (error) { setError(error.message || "Não foi possível definir a nova senha. Tente de novo."); return; } // a regra de força da senha é do Supabase Auth
     onDone();
   };
 
   return (
     <Shell>
-      <h1 className="mb-6 text-2xl">Definir nova senha</h1>
+      <h1 className="mb-1 text-2xl">Definir nova senha</h1>
+      {firstAccess && (
+        <p className="mb-5 text-sm text-mute">Primeiro acesso: escolha sua senha pessoal para entrar na plataforma.</p>
+      )}
+      {!firstAccess && <div className="mb-5" />}
       <form onSubmit={submit}>
         <PasswordInput id="nova-senha" label="Nova senha" value={pw} onChange={setPw} autoComplete="new-password" />
         <div className="mt-4"><PasswordInput id="nova-senha2" label="Confirmar nova senha" value={pw2} onChange={setPw2} autoComplete="new-password" /></div>
