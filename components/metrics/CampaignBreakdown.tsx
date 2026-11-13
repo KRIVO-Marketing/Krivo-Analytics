@@ -1,7 +1,10 @@
+"use client";
+import { useState } from "react";
 import { dec1, num } from "@/lib/format";
 import { sourceInfo } from "@/lib/translate";
 import type { CampaignMetric } from "@/lib/types";
 import { Section } from "./MetricsParts";
+import { UtmGenerator } from "./UtmGenerator";
 
 function formatCampaignName(raw: string): string {
   if (!raw || raw === "(not set)") return "Sem campanha definida";
@@ -17,13 +20,25 @@ export function CampaignBreakdown({
   ctaLabel: string;
   hasCta: boolean;
 }) {
+  const [showBuilder, setShowBuilder] = useState(false);
   const max = campaigns[0]?.sessions || 1;
 
   return (
     <Section
       title="Campanhas e Links (UTM)"
       sub="Separa links específicos — ex.: Bio do Murilo vs. Bio da KRIVO, posts do LinkedIn ou campanhas."
+      action={
+        <button
+          type="button"
+          onClick={() => setShowBuilder((v) => !v)}
+          aria-expanded={showBuilder}
+          className="rounded-xl border border-line bg-card px-3 py-2 text-xs font-medium text-ink hover:bg-accent-soft"
+        >
+          {showBuilder ? "Fechar gerador" : "+ Gerar link UTM"}
+        </button>
+      }
     >
+      {showBuilder && <UtmGenerator />}
       {campaigns.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-bg/50 p-4 text-sm text-mute">
           <p className="font-medium text-ink">Nenhum link com UTM registrado neste período.</p>
