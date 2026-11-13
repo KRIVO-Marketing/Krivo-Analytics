@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type TouchEvent } from "react";
 import { opsCall } from "@/lib/api";
 import { getCached, subscribeCache } from "@/lib/cache";
 import { CACHE_KEYS, fetchContacts, updateContactsCache } from "@/lib/data";
@@ -24,8 +24,10 @@ export default function CrmTab() {
   const [form, setForm] = useState<Contact | "new" | null>(null);
   const [over, setOver] = useState<Stage | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [panning, setPanning] = useState(false);
   const dragId = useRef<string | null>(null);
   const kanbanRef = useRef<HTMLDivElement | null>(null);
+  const pan = useRef<{ startX: number; scrollLeft: number } | null>(null);
 
   const byId = useMemo(() => new Map(team.map((m) => [m.id, m])), [team]);
 
@@ -126,6 +128,32 @@ export default function CrmTab() {
     }
   };
 
+  useEffect(() => {
+    if (!panning) return;
+    const onMove = (e: globalThis.MouseEvent) => {
+      if (!pan.current || !kanbanRef.current) return;
+      kanbanRef.current.scrollLeft = pan.current.scrollLeft - (e.clientX - pan.current.startX);
+    };
+    const onUp = () => {
+      pan.current = null;
+      setPanning(false);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [panning]);
+
+  const handleBoardMouseDown = (e: MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0 || !kanbanRef.current) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('li[draggable="true"], button, a, input, select, textarea')) return;
+    pan.current = { startX: e.clientX, scrollLeft: kanbanRef.current.scrollLeft };
+    setPanning(true);
+  };
+
   if (loading) return <div className="skeleton h-72" aria-busy="true" aria-label="Carregando" />;
 
   return (
@@ -200,7 +228,10 @@ export default function CrmTab() {
       ) : (
         <div
           ref={kanbanRef}
-          className="grid grid-flow-col auto-cols-[minmax(265px,82vw)] gap-3.5 overflow-x-auto pb-3 lg:auto-cols-[minmax(275px,1fr)]"
+          onMouseDown={handleBoardMouseDown}
+          className={`no-scrollbar grid grid-flow-col auto-cols-[minmax(265px,82vw)] items-start gap-3.5 overflow-x-auto pb-2 lg:auto-cols-[minmax(275px,1fr)] ${
+            panning ? "cursor-grabbing select-none" : "lg:cursor-grab"
+          }`}
         >
           {STAGES.map((s) => {
             const list = searchFiltered.filter((c) => c.stage === s.id);
@@ -217,7 +248,7 @@ export default function CrmTab() {
                     ? `color-mix(in srgb, ${s.color} 12%, var(--card))`
                     : `color-mix(in srgb, ${s.color} 4%, var(--card))`,
                 }}
-                className="flex min-w-0 flex-col rounded-2xl border p-3 transition"
+                className="flex max-h-[calc(100dvh-16.5rem)] min-w-0 flex-col rounded-2xl border p-3 transition lg:max-h-[calc(100dvh-14.5rem)]"
                 onDragOver={(e) => {
                   e.preventDefault();
                   setOver(s.id);
@@ -225,7 +256,7 @@ export default function CrmTab() {
                 onDragLeave={() => setOver((o) => (o === s.id ? null : o))}
                 onDrop={() => handleDropToStage(s.id)}
               >
-                <div className="mb-3 flex items-center justify-between gap-2">
+                <div className="mb-3 flex shrink-0 items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <button
                       type="button"
@@ -247,37 +278,37 @@ export default function CrmTab() {
                   )}
                 </div>
 
-                <ul className="space-y-2.5">
-                  {list.map((c) => (
-                    <ContactCard
-                      key={c.id}
-                      c={c}
-                      draggable
-                      isDragging={draggingId === c.id}
-                      owner={c.owner_id ? byId.get(c.owner_id) : undefined}
-                      followUp={isFollowUp(c)}
-                      onOpen={() => setOpenState({ id: c.id })}
-                      onQuickStage={(stage) => quickStage(c, stage)}
-                      onDragStart={() => {
-                        dragId.current = c.id;
-                        setDraggingId(c.id);
-                      }}
-                      onDragEnd={() => {
-                        dragId.current = null;
-                        setDraggingId(null);
-                        setOver(null);
-                      }}
-                      onTouchDragStart={() => {
-                        dragId.current = c.id;
-                        setDraggingId(c.id);
-                      }}
-                      onTouchDragMove={handleTouchDragMove}
-                      onTouchDragEnd={handleTouchDragEnd}
-                    />
-                  ))}
-                </ul>
-
-                {list.length === 0 && (
+                {list.length > 0 ? (
+                  <ul className="col-scroll min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-0.5">
+                    {list.map((c) => (
+                      <ContactCard
+                        key={c.id}
+                        c={c}
+                        draggable
+                        isDragging={draggingId === c.id}
+                        owner={c.owner_id ? byId.get(c.owner_id) : undefined}
+                        followUp={isFollowUp(c)}
+                        onOpen={() => setOpenState({ id: c.id })}
+                        onQuickStage={(stage) => quickStage(c, stage)}
+                        onDragStart={() => {
+                          dragId.current = c.id;
+                          setDraggingId(c.id);
+                        }}
+                        onDragEnd={() => {
+                          dragId.current = null;
+                          setDraggingId(null);
+                          setOver(null);
+                        }}
+                        onTouchDragStart={() => {
+                          dragId.current = c.id;
+                          setDraggingId(c.id);
+                        }}
+                        onTouchDragMove={handleTouchDragMove}
+                        onTouchDragEnd={handleTouchDragEnd}
+                      />
+                    ))}
+                  </ul>
+                ) : (
                   <div className="rounded-xl border border-dashed border-line/80 p-4 text-center text-xs text-mute">
                     Arraste um contato para cá
                   </div>
@@ -286,7 +317,7 @@ export default function CrmTab() {
                 <button
                   type="button"
                   onClick={() => setForm("new")}
-                  className="mt-2.5 flex w-full items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-medium text-mute transition hover:bg-[var(--grid)] hover:text-ink"
+                  className="mt-2.5 flex w-full shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-medium text-mute transition hover:bg-[var(--grid)] hover:text-ink"
                 >
                   <span aria-hidden>+</span> Adicionar contato
                 </button>
