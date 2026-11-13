@@ -1,5 +1,6 @@
 // Camada compartilhada de leitura e cache em memória para as abas do painel.
-import { apiRead, opsCall } from "./api";
+import { ApiError, apiRead, opsCall } from "./api";
+import type { Me } from "./auth";
 import { cachedFetch, getCached, setCached } from "./cache";
 import type { Contact, Member, Task } from "./ops";
 import type { Goal, Info, Metrics, Property } from "./types";
@@ -69,4 +70,21 @@ export function updateTasksCache(updater: (prev: Task[]) => Task[]) {
 export function updateContactsCache(updater: (prev: Contact[]) => Contact[]) {
   const prev = getCached<Contact[]>(CACHE_KEYS.contacts) ?? [];
   return setCached(CACHE_KEYS.contacts, updater(prev));
+}
+
+export async function bootstrapApp(): Promise<Me> {
+  try {
+    const res = await opsCall<{ user: Me; members: Member[]; tasks: Task[]; contacts: Contact[] }>({ action: "bootstrap" });
+    setCached(CACHE_KEYS.team, res.members);
+    setCached(CACHE_KEYS.tasks, res.tasks);
+    setCached(CACHE_KEYS.contacts, res.contacts);
+    return res.user;
+  } catch (e) {
+    // Retrocompatível se a função ops-api ainda não tiver sido republicada com a ação bootstrap.
+    if (e instanceof ApiError && e.code === "acao_invalida") {
+      const r = await apiRead<{ user: Me }>({ action: "me" });
+      return r.user;
+    }
+    throw e;
+  }
 }

@@ -1,9 +1,10 @@
 // Porta de entrada: nada do painel (nem a árvore de componentes, nem requisições) existe antes do login.
 "use client";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { apiRead, registerAuthHandlers } from "@/lib/api";
+import { registerAuthHandlers } from "@/lib/api";
 import { getAuth, getSiteUrl, type Me } from "@/lib/auth";
 import { invalidateCache } from "@/lib/cache";
+import { bootstrapApp } from "@/lib/data";
 import Logo from "./Logo";
 
 const MeContext = createContext<{ me: Me; signOut: () => void } | null>(null);
@@ -71,10 +72,10 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   async function loadMe(expectedUserId?: string) {
     try {
-      const r = await apiRead<{ user: Me }>({ action: "me" });
+      const user = await bootstrapApp();
       if (expectedUserId && loadingUserRef.current !== expectedUserId) return;
-      meRef.current = r.user;
-      setMe(r.user);
+      meRef.current = user;
+      setMe(user);
       setView((v) => (v === "recovery" ? v : "panel"));
     } catch {
       /* 401/403 já tratados pelos handlers; outros erros: volta ao login sem expor detalhes */
