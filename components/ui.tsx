@@ -43,7 +43,7 @@ export function Modal({ title, onClose, children, z = 50 }: { title: string; onC
   }, []);
   return (
     <div
-      className="fixed inset-0 flex items-end justify-center bg-[#0f1b33]/65 backdrop-blur-[2px] p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 flex items-end justify-center bg-black/65 backdrop-blur-sm p-0 sm:items-center sm:p-4"
       style={{ zIndex: z }}
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
     >
@@ -53,9 +53,9 @@ export function Modal({ title, onClose, children, z = 50 }: { title: string; onC
         aria-modal="true"
         aria-label={title}
         style={{ boxShadow: "var(--shadow-sheet)" }}
-        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border border-line bg-page sm:rounded-2xl"
+        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border border-line bg-card sm:rounded-2xl"
       >
-        <div className="shrink-0 border-b border-line bg-page/95 px-4 pt-2.5 pb-3 backdrop-blur-sm sm:px-5 sm:pt-3.5">
+        <div className="shrink-0 border-b border-line bg-card/95 px-4 pt-2.5 pb-3 backdrop-blur-sm sm:px-5 sm:pt-3.5">
           <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[var(--soft)]/60 sm:hidden" aria-hidden />
           <div className="flex items-center justify-between gap-3">
             <h2 className="min-w-0 truncate text-lg font-medium sm:text-xl">{title}</h2>
