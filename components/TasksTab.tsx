@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { opsCall } from "@/lib/api";
+import { getCached, subscribeCache } from "@/lib/cache";
+import { CACHE_KEYS, fetchContacts, fetchTasks, updateTasksCache } from "@/lib/data";
 import { dueInfo, nameOf, TASK_STATUS, todayISO, type Contact, type Member, type Task, type TaskStatus } from "@/lib/ops";
 import { useMe } from "./AuthGate";
 import { Avatar, ChipRow, EmptyState, FormError, useTeam } from "./opsui";
@@ -9,8 +11,9 @@ import { ErrorBox, Modal } from "./ui";
 export default function TasksTab() {
   const { me } = useMe();
   const team = useTeam();
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>(() => getCached<Task[]>(CACHE_KEYS.tasks) ?? []);
+  const [contacts, setContacts] = useState<Contact[]>(() => getCached<Contact[]>(CACHE_KEYS.contacts) ?? []);
+  const [loading, setLoading] = useState(() => getCached<Task[]>(CACHE_KEYS.tasks) === undefined);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<TaskStatus>("a_fazer");
   const [mine, setMine] = useState(false);
@@ -26,19 +29,29 @@ export default function TasksTab() {
   }, []);
   const dragId = useRef<string | null>(null);
   const [over, setOver] = useState<TaskStatus | null>(null);
-  const [contactNames, setContactNames] = useState<Map<string, string>>(new Map());
   const byId = useMemo(() => new Map(team.map((m) => [m.id, m])), [team]);
+  const contactNames = useMemo(() => new Map(contacts.map((c) => [c.id, c.name])), [contacts]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     try {
-      const r = await opsCall<{ tasks: Task[] }>({ action: "tasks_list" });
-      setTasks(r.tasks); setError(null);
+      const list = await fetchTasks(force);
+      setTasks(list); setError(null);
     } catch (e) { setError((e as Error).message); } finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+
   useEffect(() => {
-    opsCall<{ contacts: Contact[] }>({ action: "contacts_list" }).then((r) => setContactNames(new Map(r.contacts.map((c) => [c.id, c.name])))).catch(() => {});
-  }, []);
+    const unsubTasks = subscribeCache(CACHE_KEYS.tasks, () => {
+      const cached = getCached<Task[]>(CACHE_KEYS.tasks);
+      if (cached) { setTasks(cached); setLoading(false); }
+    });
+    const unsubContacts = subscribeCache(CACHE_KEYS.contacts, () => {
+      const cached = getCached<Contact[]>(CACHE_KEYS.contacts);
+      if (cached) setContacts(cached);
+    });
+    load();
+    fetchContacts().then(setContacts).catch(() => {});
+    return () => { unsubTasks(); unsubContacts(); };
+  }, [load]);
 
   const visible = useMemo(() => (mine ? tasks.filter((t) => t.assignee_id === me.id) : tasks), [tasks, mine, me.id]);
   const col = (s: TaskStatus) => visible.filter((t) => t.status === s);
@@ -46,11 +59,11 @@ export default function TasksTab() {
   // Mudança otimista: a tela responde na hora; se o servidor recusar, recarrega e avisa.
   const patch = async (t: Task, changes: Record<string, unknown>) => {
     const minPos = Math.min(0, ...tasks.map((x) => x.position)) - 1;
-    setTasks((all) => all.map((x) => (x.id === t.id ? { ...x, ...changes, ...(changes.status && changes.status !== t.status ? { position: minPos } : {}) } as Task : x)));
+    updateTasksCache((all) => all.map((x) => (x.id === t.id ? { ...x, ...changes, ...(changes.status && changes.status !== t.status ? { position: minPos } : {}) } as Task : x)));
     try {
       const r = await opsCall<{ task: Task }>({ action: "task_update", id: t.id, ...changes });
-      setTasks((all) => all.map((x) => (x.id === t.id ? r.task : x)));
-    } catch (e) { setError((e as Error).message); load(); }
+      updateTasksCache((all) => all.map((x) => (x.id === t.id ? r.task : x)));
+    } catch (e) { setError((e as Error).message); load(true); }
   };
 
   const add = async (e: React.FormEvent) => {
@@ -60,7 +73,8 @@ export default function TasksTab() {
     setAdding(true);
     try {
       const r = await opsCall<{ task: Task }>({ action: "task_create", title, status, assignee_id: me.id });
-      setTasks((all) => [r.task, ...all]); setDraft(""); setError(null);
+      updateTasksCache((all) => [r.task, ...all]);
+      setDraft(""); setError(null);
     } catch (e) { setError((e as Error).message); } finally { setAdding(false); }
   };
 
@@ -84,7 +98,7 @@ export default function TasksTab() {
         </div>
       </div>
 
-      {error && <ErrorBox message={error} onRetry={load} />}
+      {error && <ErrorBox message={error} onRetry={() => load(true)} />}
 
       <div className="grid gap-4 lg:grid-cols-4">
         {TASK_STATUS.map((s) => {
@@ -117,9 +131,9 @@ export default function TasksTab() {
       </div>
 
       {open && (
-        <TaskSheet task={open} team={team} onClose={() => setOpen(null)}
-          onSaved={(t) => { setTasks((all) => all.map((x) => (x.id === t.id ? t : x))); setOpen(null); }}
-          onDeleted={(id) => { setTasks((all) => all.filter((x) => x.id !== id)); setOpen(null); }} />
+        <TaskSheet task={open} team={team} contacts={contacts} onClose={() => setOpen(null)}
+          onSaved={(t) => { updateTasksCache((all) => all.map((x) => (x.id === t.id ? t : x))); setOpen(null); }}
+          onDeleted={(id) => { updateTasksCache((all) => all.filter((x) => x.id !== id)); setOpen(null); }} />
       )}
     </div>
   );
@@ -149,7 +163,7 @@ function TaskCard({ t, assignee, desktop, client, onOpen, onToggle, onDragStart 
   );
 }
 
-function TaskSheet({ task, team, onClose, onSaved, onDeleted }: { task: Task; team: Member[]; onClose: () => void; onSaved: (t: Task) => void; onDeleted: (id: string) => void }) {
+function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }: { task: Task; team: Member[]; contacts: Contact[]; onClose: () => void; onSaved: (t: Task) => void; onDeleted: (id: string) => void }) {
   const { me } = useMe();
   const [title, setTitle] = useState(task.title);
   const [status, setStatus] = useState<TaskStatus>(task.status);
@@ -158,14 +172,9 @@ function TaskSheet({ task, team, onClose, onSaved, onDeleted }: { task: Task; te
   const [desc, setDesc] = useState(task.description ?? "");
   const [tags, setTags] = useState(task.tags.join(", "));
   const [contact, setContact] = useState(task.contact_id ?? "");
-  const [contacts, setContacts] = useState<Contact[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [confirmDel, setConfirmDel] = useState(false);
-
-  useEffect(() => {
-    opsCall<{ contacts: Contact[] }>({ action: "contacts_list" }).then((r) => setContacts(r.contacts)).catch(() => {});
-  }, []);
 
   const tomorrow = () => { const d = new Date(); d.setDate(d.getDate() + 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 

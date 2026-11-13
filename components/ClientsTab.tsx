@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { apiRead, apiWrite } from "@/lib/api";
+import { apiWrite } from "@/lib/api";
+import { getCached, invalidateCache } from "@/lib/cache";
+import { CACHE_KEYS, fetchInfo, fetchProperties } from "@/lib/data";
 import type { Info, Property } from "@/lib/types";
 import { useMe } from "./AuthGate";
 import ClientForm from "./ClientForm";
@@ -11,8 +13,11 @@ type Confirm = { kind: "remove" | "deactivate"; p: Property };
 
 export default function ClientsTab() {
   const canEdit = useMe().me.role === "admin"; // só esconde botões; quem recusa é o back-end
-  const [info, setInfo] = useState<Info | null>(null);
-  const [list, setList] = useState<Property[] | null>(null);
+  const [info, setInfo] = useState<Info | null>(() => getCached<Info>(CACHE_KEYS.info) ?? null);
+  const [list, setList] = useState<Property[] | null>(() => {
+    const props = getCached<Property[]>(CACHE_KEYS.properties);
+    return props ? props.filter((p) => p.kind === "client") : null;
+  });
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<{ edit?: Property } | null>(null);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
@@ -22,12 +27,12 @@ export default function ClientsTab() {
   const [viewing, setViewing] = useState<Property | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setError(null);
     try {
-      const [i, l] = await Promise.all([apiRead<Info>({ action: "info" }), apiRead<{ properties: Property[] }>({ action: "list" })]);
+      const [i, l] = await Promise.all([fetchInfo(force), fetchProperties(force)]);
       setInfo(i);
-      setList(l.properties.filter((p) => p.kind === "client"));
+      setList(l.filter((p) => p.kind === "client"));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -41,7 +46,7 @@ export default function ClientsTab() {
 
   const toggle = async (p: Property) => {
     setRowErr(null); setBusy(true);
-    try { await apiWrite({ action: "update", id: p.id, active: !p.active }); await load(); }
+    try { await apiWrite({ action: "update", id: p.id, active: !p.active }); invalidateCache(`metrics:${p.id}:`); await load(true); }
     catch (e) { setRowErr({ id: p.id, message: (e as Error).message }); }
     finally { setBusy(false); }
   };
@@ -52,8 +57,9 @@ export default function ClientsTab() {
     try {
       if (confirm.kind === "remove") await apiWrite({ action: "delete", id: confirm.p.id });
       else await apiWrite({ action: "update", id: confirm.p.id, active: false });
+      invalidateCache(`metrics:${confirm.p.id}:`);
       setConfirm(null);
-      await load();
+      await load(true);
     } catch (e) { setConfirmErr((e as Error).message); }
     finally { setBusy(false); }
   };
@@ -82,7 +88,7 @@ export default function ClientsTab() {
         </div>
       )}
 
-      {error && <ErrorBox message={error} onRetry={load} />}
+      {error && <ErrorBox message={error} onRetry={() => load(true)} />}
       {!error && list === null && <div className="skeleton h-40" aria-busy="true" aria-label="Carregando clientes" />}
 
       {list && list.length === 0 && (
@@ -119,7 +125,7 @@ export default function ClientsTab() {
         </ul>
       )}
 
-      {form && <ClientForm initial={form.edit} onClose={() => setForm(null)} onSaved={() => { setForm(null); load(); }} />}
+      {form && <ClientForm initial={form.edit} onClose={() => setForm(null)} onSaved={() => { if (form.edit) invalidateCache(`metrics:${form.edit.id}:`); setForm(null); load(true); }} />}
 
       {confirm && (
         <Modal title={confirm.kind === "remove" ? "Remover cliente" : "Desativar cliente"} onClose={() => !busy && setConfirm(null)}>

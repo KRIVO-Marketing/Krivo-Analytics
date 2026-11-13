@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { opsCall } from "@/lib/api";
+import { getCached, subscribeCache } from "@/lib/cache";
+import { CACHE_KEYS, fetchContacts, updateContactsCache } from "@/lib/data";
 import { brl, dueInfo, KINDS, nameOf, phoneFmt, prettyNote, STAGES, stageOf, todayISO, waLink, type Contact, type Interaction, type Member, type Stage } from "@/lib/ops";
 import { useMe } from "./AuthGate";
 import { ChipRow, EmptyState, FormError, Pill, useTeam } from "./opsui";
@@ -10,21 +12,29 @@ type Filter = "todos" | "retornar" | Stage;
 
 export default function CrmTab() {
   const team = useTeam();
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [contacts, setContacts] = useState<Contact[]>(() => getCached<Contact[]>(CACHE_KEYS.contacts) ?? []);
+  const [loading, setLoading] = useState(() => getCached<Contact[]>(CACHE_KEYS.contacts) === undefined);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("todos");
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [form, setForm] = useState<Contact | "new" | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     try {
-      const r = await opsCall<{ contacts: Contact[] }>({ action: "contacts_list" });
-      setContacts(r.contacts); setError(null);
+      setContacts(await fetchContacts(force));
+      setError(null);
     } catch (e) { setError((e as Error).message); } finally { setLoading(false); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const unsub = subscribeCache(CACHE_KEYS.contacts, () => {
+      const cached = getCached<Contact[]>(CACHE_KEYS.contacts);
+      if (cached) { setContacts(cached); setLoading(false); }
+    });
+    load();
+    return unsub;
+  }, [load]);
 
   const today = todayISO();
   const isFollowUp = (c: Contact) => !!c.next_contact_at && c.next_contact_at <= today && c.stage !== "fechado" && c.stage !== "perdido";
@@ -52,7 +62,7 @@ export default function CrmTab() {
           { id: "retornar", label: "Retornar", count: count("retornar") },
           ...STAGES.map((s) => ({ id: s.id as Filter, label: s.label, count: count(s.id), color: s.color })),
         ]} />
-      {error && <ErrorBox message={error} onRetry={load} />}
+      {error && <ErrorBox message={error} onRetry={() => load(true)} />}
 
       {shown.length === 0 ? (
         <EmptyState title={contacts.length ? "Nenhum cliente neste filtro" : "Nenhum cliente cadastrado ainda"} hint={contacts.length ? undefined : "Toque em “+ Novo” para cadastrar o primeiro."} />
@@ -88,12 +98,17 @@ export default function CrmTab() {
       )}
 
       {openId && (
-        <ContactSheet id={openId} team={team} onClose={() => setOpenId(null)} onChanged={load}
-          onEdit={(c) => setForm(c)} onDeleted={() => { setOpenId(null); load(); }} />
+        <ContactSheet id={openId} team={team} onClose={() => setOpenId(null)} onChanged={() => load(true)}
+          onEdit={(c) => setForm(c)} onDeleted={() => { const removed = openId; setOpenId(null); updateContactsCache((all) => all.filter((x) => x.id !== removed)); }} />
       )}
       {form && (
         <ContactForm initial={form === "new" ? undefined : form} team={team} onClose={() => setForm(null)}
-          onSaved={(c) => { setForm(null); load(); if (form === "new") setOpenId(c.id); }} />
+          onSaved={(c) => {
+            const isNew = form === "new";
+            setForm(null);
+            updateContactsCache((all) => (isNew ? [c, ...all] : all.map((x) => (x.id === c.id ? c : x))));
+            if (isNew) setOpenId(c.id);
+          }} />
       )}
     </div>
   );
@@ -208,7 +223,11 @@ function ContactSheet({ id, team, onClose, onChanged, onEdit, onDeleted }: { id:
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
             {me.role === "admin" ? (confirmDel ? (
               <div className="flex gap-2">
-                <button type="button" className="btn btn-danger flex-1" disabled={busy} onClick={() => run(async () => { await opsCall({ action: "contact_delete", id }); onDeleted(); })}>Confirmar exclusão</button>
+                <button type="button" className="btn btn-danger flex-1" disabled={busy} onClick={async () => {
+                  setBusy(true); setErr(null);
+                  try { await opsCall({ action: "contact_delete", id }); onDeleted(); }
+                  catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+                }}>Confirmar exclusão</button>
                 <button type="button" className="btn" onClick={() => setConfirmDel(false)}>Cancelar</button>
               </div>
             ) : <button type="button" className="btn btn-danger" onClick={() => setConfirmDel(true)}>Excluir</button>) : <span />}

@@ -1,17 +1,18 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { opsCall } from "@/lib/api";
+import { getCached, subscribeCache } from "@/lib/cache";
+import { CACHE_KEYS, fetchTeam } from "@/lib/data";
 import { initial, type Member } from "@/lib/ops";
 
 // Equipe carregada uma vez e compartilhada entre Tarefas e CRM.
-let teamPromise: Promise<Member[]> | null = null;
 export function useTeam() {
-  const [team, setTeam] = useState<Member[]>([]);
+  const [team, setTeam] = useState<Member[]>(() => getCached<Member[]>(CACHE_KEYS.team) ?? []);
   useEffect(() => {
-    teamPromise ??= opsCall<{ members: Member[] }>({ action: "team" }).then((r) => r.members).catch((e) => { teamPromise = null; throw e; });
     let live = true;
-    teamPromise.then((m) => live && setTeam(m)).catch(() => {});
-    return () => { live = false; };
+    const sync = () => { if (live) setTeam(getCached<Member[]>(CACHE_KEYS.team) ?? []); };
+    const unsub = subscribeCache(CACHE_KEYS.team, sync);
+    fetchTeam().then((m) => { if (live) setTeam(m); }).catch(() => {});
+    return () => { live = false; unsub(); };
   }, []);
   return team;
 }
