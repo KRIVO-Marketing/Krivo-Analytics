@@ -7,8 +7,10 @@ import { eventInfo, groupPages, isTechnicalEvent, pageLabel } from "@/lib/transl
 import type { Metrics } from "@/lib/types";
 import LineChart, { type SeriesKey } from "../LineChart";
 import { ErrorBox } from "../ui";
+import { CampaignBreakdown } from "./CampaignBreakdown";
 import { ChannelBreakdown } from "./ChannelBreakdown";
 import { Change, MetricsDigest, MetricsSkeleton, Section, StatCard } from "./MetricsParts";
+import { RealtimeBanner } from "./RealtimeBanner";
 
 const PERIODS = [7, 14, 28, 90];
 const CTA_HINT = "Defina o evento do botão no cadastro para acompanhar cliques";
@@ -88,6 +90,8 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
         </div>
       </div>
 
+      <RealtimeBanner propertyId={propertyId} />
+
       {error && <ErrorBox message={error} onRetry={() => load(true)} />}
       {loading && !data && !error && <MetricsSkeleton />}
 
@@ -162,6 +166,12 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
           <MetricsDigest data={data} />
 
           <ChannelBreakdown sources={data.sources} hasCta={hasCta} />
+
+          <CampaignBreakdown
+            campaigns={data.campaigns ?? []}
+            ctaLabel={data.property.cta_label ?? "cliques"}
+            hasCta={hasCta}
+          />
 
           {data.funnel.length > 0 && (
             <Section title="Do acesso ao clique" sub="Quantas pessoas chegaram em cada etapa da visita.">
