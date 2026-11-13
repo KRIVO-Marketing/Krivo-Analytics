@@ -10,7 +10,6 @@ import CrmTab from "./CrmTab";
 import KrivoTab from "./KrivoTab";
 import Logo from "./Logo";
 import TasksTab from "./TasksTab";
-import { ThemeToggle } from "./ThemeToggle";
 
 const TABS = [
   { id: "tarefas", label: "Tarefas", sub: "Fluxo operacional e entregas da equipe" },
@@ -99,7 +98,7 @@ export default function App() {
   return (
     <div className="min-h-dvh lg:flex">
       {/* Sidebar fixa no Desktop */}
-      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-card">
+      <aside className="hidden lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-line lg:bg-page">
         <div className="flex h-14 items-center justify-between border-b border-line px-5">
           <Logo className="text-2xl text-ink" />
           <span className="rounded-md bg-[var(--accent-soft)] px-2 py-0.5 text-[11px] font-medium text-accent">
@@ -120,8 +119,8 @@ export default function App() {
                 aria-current={active ? "page" : undefined}
                 className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition ${
                   active
-                    ? "bg-[var(--accent-soft)] text-accent shadow-[inset_0_0_0_1px_rgba(79,140,255,0.28)]"
-                    : "text-mute hover:bg-[var(--surface-2)] hover:text-ink"
+                    ? "bg-[var(--accent-soft)] text-accent shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--accent)_35%,transparent)]"
+                    : "text-mute hover:bg-[var(--grid)] hover:text-ink"
                 }`}
               >
                 <span className="flex items-center gap-2.5">
@@ -133,7 +132,7 @@ export default function App() {
                     className={`rounded-full px-2 py-0.5 text-[11px] tabular-nums ${
                       t.id === "crm"
                         ? "bg-[color-mix(in_srgb,var(--neg)_16%,transparent)] text-neg"
-                        : "bg-[var(--surface-2)] text-mute"
+                        : "bg-[var(--grid)] text-mute"
                     }`}
                   >
                     {badge}
@@ -145,12 +144,9 @@ export default function App() {
         </nav>
 
         <div className="border-t border-line p-3 space-y-2.5">
-          <div className="flex items-center justify-between gap-2 rounded-xl bg-[var(--surface-2)] px-3 py-2">
-            <div className="min-w-0">
-              <p className="truncate text-xs font-medium text-ink" title={me.email}>{me.email}</p>
-              <p className="text-[11px] text-mute">{me.role === "admin" ? "Administrador" : "Membro"}</p>
-            </div>
-            <ThemeToggle />
+          <div className="rounded-xl bg-[var(--grid)] px-3 py-2">
+            <p className="truncate text-xs font-medium text-ink" title={me.email}>{me.email}</p>
+            <p className="text-[11px] text-mute">{me.role === "admin" ? "Administrador" : "Membro"}</p>
           </div>
           <button
             type="button"
@@ -165,22 +161,19 @@ export default function App() {
       {/* Coluna principal */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Topbar compacta no Mobile */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-card/90 px-4 backdrop-blur-md lg:hidden">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-page/90 px-4 backdrop-blur-md lg:hidden">
           <div className="flex items-center gap-2.5">
             <Logo className="text-xl text-ink" />
             <span className="h-3.5 w-px bg-line" aria-hidden />
             <span className="text-sm font-medium text-mute">{activeTab.label}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={signOut}
-              className="inline-flex h-9 items-center rounded-xl border border-line bg-[var(--surface-2)] px-3 text-xs font-medium text-ink transition hover:border-[var(--neg)]/50 hover:text-neg"
-            >
-              Sair
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={signOut}
+            className="inline-flex h-9 items-center rounded-xl border border-line bg-[var(--grid)] px-3 text-xs font-medium text-ink transition hover:border-[var(--neg)]/50 hover:text-neg"
+          >
+            Sair
+          </button>
         </header>
 
         {/* Topbar limpa no Desktop */}
@@ -204,7 +197,7 @@ export default function App() {
       <div
         role="tablist"
         aria-label="Seções"
-        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-page/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden"
       >
         {TABS.map((t, i) => {
           const active = tab === t.id;

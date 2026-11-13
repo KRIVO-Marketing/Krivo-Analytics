@@ -134,13 +134,13 @@ export default function LineChart({ daily, series = "sessions" }: { daily: Metri
           <g>
             <line x1={x(hover!)} x2={x(hover!)} y1={MT} y2={MT + ih} stroke="var(--mute)" strokeOpacity="0.45" strokeDasharray="3 3" />
             <circle cx={x(hover!)} cy={y(d[series])} r="8" fill="var(--chart-line)" fillOpacity="0.18" />
-            <circle cx={x(hover!)} cy={y(d[series])} r="4.5" fill="var(--chart-line)" stroke="var(--card)" strokeWidth="2" />
+            <circle cx={x(hover!)} cy={y(d[series])} r="4.5" fill="var(--chart-line)" stroke="var(--page)" strokeWidth="2" />
           </g>
         )}
       </svg>
       {d && (
         <div
-          className="pointer-events-none absolute top-1 z-10 w-42 rounded-xl border border-line bg-card/95 p-2.5 text-xs text-ink shadow-lg backdrop-blur-md"
+          className="pointer-events-none absolute top-1 z-10 w-42 rounded-xl border border-line bg-page/95 p-2.5 text-xs text-ink shadow-lg backdrop-blur-md"
           style={{ left: tipLeft }}
           role="status"
         >

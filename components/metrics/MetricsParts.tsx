@@ -5,7 +5,7 @@ import type { Metrics } from "@/lib/types";
 
 export function Change({ v }: { v: number | null | undefined }) {
   if (v === null || v === undefined) return <span className="text-xs text-mute">sem comparação</span>;
-  if (v === 0) return <span className="inline-flex items-center rounded-full bg-[var(--surface-2)] px-2 py-0.5 text-xs font-medium text-mute">0,0%</span>;
+  if (v === 0) return <span className="inline-flex items-center rounded-full bg-[var(--grid)] px-2 py-0.5 text-xs font-medium text-mute">0,0%</span>;
   const up = v > 0;
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5 text-xs">
