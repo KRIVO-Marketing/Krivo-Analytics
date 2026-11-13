@@ -7,6 +7,7 @@ import CrmTab from "./CrmTab";
 import KrivoTab from "./KrivoTab";
 import TasksTab from "./TasksTab";
 import Logo from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 
 function TabIcon({ id }: { id: TabId }) {
   const props = { width: 20, height: 20, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.75, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true as const };
@@ -54,8 +55,9 @@ export default function App() {
             <Logo className="text-2xl sm:text-5xl" />
             <div className="flex min-w-0 items-center gap-2 text-xs sm:gap-3 sm:text-sm">
               <span className="max-w-[9.5rem] truncate opacity-90 sm:max-w-xs" title={me.email}>{me.email}</span>
+              <ThemeToggle className="!border-white/20 !bg-white/10 !text-white hover:!border-white/45" />
               <button type="button" onClick={signOut}
-                className="inline-flex min-h-9 items-center rounded-xl border border-white/30 px-3 text-white transition hover:bg-white/15 sm:min-h-10 sm:px-4">
+                className="inline-flex min-h-9 items-center rounded-xl border border-white/25 px-3 text-white transition hover:bg-white/15 sm:min-h-9 sm:px-3.5">
                 Sair
               </button>
             </div>

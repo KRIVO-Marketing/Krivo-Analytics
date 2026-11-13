@@ -6,6 +6,7 @@ import { getAuth, getSiteUrl, type Me } from "@/lib/auth";
 import { invalidateCache } from "@/lib/cache";
 import { bootstrapApp } from "@/lib/data";
 import Logo from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 
 const MeContext = createContext<{ me: Me; signOut: () => void } | null>(null);
 export const useMe = () => useContext(MeContext)!;
@@ -105,10 +106,18 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-dvh place-items-center px-4 py-10">
-      <div className="w-full max-w-sm">
-        <Logo className="mb-8 block text-5xl" />
-        {children}
+    <div className="relative grid min-h-dvh place-items-center overflow-hidden px-4 py-10">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 left-1/2 h-80 w-[36rem] -translate-x-1/2 rounded-full opacity-25 blur-3xl"
+        style={{ background: "radial-gradient(circle, var(--accent) 0%, transparent 70%)" }}
+      />
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+      <div className="relative w-full max-w-sm">
+        <Logo className="mb-6 block text-4xl sm:text-5xl" />
+        <div className="card p-6 sm:p-7">{children}</div>
       </div>
     </div>
   );
