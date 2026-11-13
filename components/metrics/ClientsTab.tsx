@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiWrite } from "@/lib/api";
 import { getCached, invalidateCache } from "@/lib/cache";
-import { CACHE_KEYS, fetchInfo, fetchProperties } from "@/lib/data";
+import { CACHE_KEYS, fetchInfo, fetchProperties, prefetchMetrics } from "@/lib/data";
 import type { Info, Property } from "@/lib/types";
 import { useMe } from "../AuthGate";
 import ClientForm from "../ClientForm";
@@ -32,7 +32,9 @@ export default function ClientsTab() {
     try {
       const [i, l] = await Promise.all([fetchInfo(force), fetchProperties(force)]);
       setInfo(i);
-      setList(l.filter((p) => p.kind === "client"));
+      const clients = l.filter((p) => p.kind === "client");
+      setList(clients);
+      for (const p of clients.filter((c) => c.active).slice(0, 2)) prefetchMetrics(p.id, 28);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -186,7 +188,14 @@ export default function ClientsTab() {
 
               <div className="mt-3">
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-                  <button type="button" className="btn btn-primary col-span-2 sm:col-span-1" onClick={() => setViewing(p)}>
+                  <button
+                    type="button"
+                    className="btn btn-primary col-span-2 sm:col-span-1"
+                    onMouseEnter={() => prefetchMetrics(p.id, 28)}
+                    onFocus={() => prefetchMetrics(p.id, 28)}
+                    onTouchStart={() => prefetchMetrics(p.id, 28)}
+                    onClick={() => setViewing(p)}
+                  >
                     Ver métricas
                   </button>
                   {canEdit && (

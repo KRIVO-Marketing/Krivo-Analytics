@@ -297,11 +297,21 @@ async function goalDelete(i: any) {
   if (error) throw new AppError(500, "db", "Erro ao remover a meta.");
   return { ok: true };
 }
+const METRICS_CACHE_MS = 10 * 60_000;
+const REALTIME_CACHE_MS = 20_000;
+const metricsCache = new Map<string, { data: unknown; exp: number }>();
+const realtimeCache = new Map<string, { data: unknown; exp: number }>();
+
 async function metrics(i: any) {
   const prop = await getProp(i.id);
   if (!prop.active) throw new AppError(409, "inativo", "Essa propriedade está desativada.");
   const days = Number(i.days ?? 28);
   if (!DAYS_ALLOWED.includes(days)) throw new AppError(400, "validacao", `Período inválido. Use: ${DAYS_ALLOWED.join(", ")}.`);
+  const cacheKey = `${prop.id}:${days}`;
+  if (!i.force) {
+    const hit = metricsCache.get(cacheKey);
+    if (hit && hit.exp > Date.now()) return hit.data;
+  }
   const pid = prop.property_id;
   const cta: string | null = prop.cta_event;
   const range = [{ startDate: `${days}daysAgo`, endDate: "yesterday" }];
@@ -410,7 +420,7 @@ async function metrics(i: any) {
     }));
   const end = new Date(Date.now() - 864e5);
   const start = new Date(end.getTime() - (days - 1) * 864e5);
-  return {
+  const payload = {
     property: { id: prop.id, name: prop.name, kind: prop.kind, property_id: pid, cta_event: cta, cta_label: prop.cta_label ?? null },
     days,
     range: { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) },
@@ -424,11 +434,15 @@ async function metrics(i: any) {
     change_pct: { sessions: pct(tot[0], pv[0]), users: pct(tot[1], pv[1]), pageviews: pct(tot[2], pv[2]) },
     daily, sources, campaigns, pages, events, funnel,
   };
+  metricsCache.set(cacheKey, { data: payload, exp: Date.now() + METRICS_CACHE_MS });
+  return payload;
 }
 
 async function realtime(i: any) {
   const prop = await getProp(i.id);
   if (!prop.active) throw new AppError(409, "inativo", "Essa propriedade está desativada.");
+  const hit = realtimeCache.get(prop.id);
+  if (!i.force && hit && hit.exp > Date.now()) return hit.data;
   const pid = prop.property_id;
   const [totRep, pagesRep, evRep] = await Promise.all([
     ga(pid, "runRealtimeReport", {
@@ -452,7 +466,7 @@ async function realtime(i: any) {
   const activeUsers = totVals?.[0] ?? devRows.reduce((a: number, r: any) => a + r.m[0], 0);
   const pageviews = totVals?.[1] ?? devRows.reduce((a: number, r: any) => a + r.m[1], 0);
   const events = totVals?.[2] ?? devRows.reduce((a: number, r: any) => a + r.m[2], 0);
-  return {
+  const rtPayload = {
     generated_at: new Date().toISOString(),
     window_minutes: 30,
     active_users: activeUsers,
@@ -461,6 +475,8 @@ async function realtime(i: any) {
     pages: rows(pagesRep).map((r: any) => ({ title: r.d[0], users: r.m[0], views: r.m[1] })),
     top_events: rows(evRep).map((r: any) => ({ name: r.d[0], count: r.m[0], users: 0 })),
   };
+  realtimeCache.set(prop.id, { data: rtPayload, exp: Date.now() + REALTIME_CACHE_MS });
+  return rtPayload;
 }
 
 const WRITE_ACTIONS = ["create", "update", "delete", "goal_create", "goal_update", "goal_delete"];
