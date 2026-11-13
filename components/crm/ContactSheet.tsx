@@ -119,7 +119,7 @@ export function ContactSheet({ id, initialContact, team, askLossInitially = fals
                   <div
                     key={s.id}
                     className="h-1.5 flex-1 rounded-full transition-colors"
-                    style={{ background: filled ? s.color : "var(--surface-2)" }}
+                    style={{ background: filled ? s.color : "var(--grid)" }}
                   />
                 );
               })}
