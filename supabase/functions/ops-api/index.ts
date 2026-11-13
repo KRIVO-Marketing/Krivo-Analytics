@@ -2,14 +2,21 @@
 // Toda autenticação, permissão, validação e regra de negócio fica aqui. O front-end só apresenta.
 // As tabelas têm RLS ativo e nenhum grant para anon/authenticated: só esta função (service_role) acessa.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from "npm:jose@5";
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
+const ISSUER = `${SUPABASE_URL}/auth/v1`;
+const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks.json`));
+const JWT_SECRET = Deno.env.get("SUPABASE_JWT_SECRET") ?? Deno.env.get("JWT_SECRET") ?? "";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*", // autenticação é por Bearer (sem cookies), então não há risco de CSRF
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Expose-Headers": "Retry-After",
+  "Access-Control-Max-Age": "86400",
 };
-const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+const sb = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
   auth: { persistSession: false },
 });
 
@@ -47,17 +54,50 @@ async function rateLimit(key: string, cfg: { limit: number; window: number }) {
 
 // ---------- autenticação e permissão ----------
 type Member = { id: string; email: string; role: "admin" | "viewer" };
-async function authenticate(req: Request): Promise<Member> {
-  const h = req.headers.get("authorization") ?? "";
-  const token = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
-  if (!token) throw new AppError(401, "nao_autenticado", "Faça login para continuar.");
-  const { data, error } = await sb.auth.getUser(token);
-  if (error || !data?.user) throw new AppError(401, "sessao_invalida", "Sua sessão expirou. Entre novamente.");
-  const { data: m, error: e2 } = await sb.from("ga4_members").select("role").eq("user_id", data.user.id).maybeSingle();
-  if (e2) throw new AppError(500, "db", "Erro ao verificar permissão.");
-  if (!m) throw new AppError(403, "sem_permissao", "Seu usuário não tem acesso a esta plataforma.");
-  return { id: data.user.id, email: data.user.email ?? "", role: m.role };
+const tokenCache = new Map<string, { id: string; email: string; expMs: number }>();
+
+async function verifyToken(token: string): Promise<{ id: string; email: string }> {
+  let alg: string | undefined;
+  try {
+    alg = decodeProtectedHeader(token).alg;
+  } catch {
+    throw new AppError(401, "sessao_invalida", "Sua sessão expirou. Entre novamente.");
+  }
+
+  if (alg === "HS256" && !JWT_SECRET) {
+    const now = Date.now();
+    const cached = tokenCache.get(token);
+    if (cached && cached.expMs > now) return { id: cached.id, email: cached.email };
+
+    const { data, error } = await sb.auth.getUser(token);
+    if (error || !data?.user) throw new AppError(401, "sessao_invalida", "Sua sessão expirou. Entre novamente.");
+    if (tokenCache.size >= 200) tokenCache.clear();
+    tokenCache.set(token, { id: data.user.id, email: data.user.email ?? "", expMs: now + 60_000 });
+    return { id: data.user.id, email: data.user.email ?? "" };
+  }
+
+  try {
+    const key = alg === "HS256" ? new TextEncoder().encode(JWT_SECRET) : JWKS;
+    const { payload } = await jwtVerify(token, key, { issuer: ISSUER });
+    if (typeof payload.sub !== "string") throw new Error("missing_sub");
+    return { id: payload.sub, email: typeof payload.email === "string" ? payload.email : "" };
+  } catch {
+    throw new AppError(401, "sessao_invalida", "Sua sessão expirou. Entre novamente.");
+  }
 }
+
+async function authorizeRequest(req: Request, token: string, isWrite: boolean): Promise<Member> {
+  const authUser = await verifyToken(token);
+  const [, memberRes] = await Promise.all([
+    rateLimit(`ops-ip:${clientIp(req)}`, LIMITS.ip),
+    sb.from("ga4_members").select("role").eq("user_id", authUser.id).maybeSingle(),
+    rateLimit(`ops-${isWrite ? "w" : "r"}:${authUser.id}`, isWrite ? LIMITS.write : LIMITS.read),
+  ]);
+  if (memberRes.error) throw new AppError(500, "db", "Erro ao verificar permissão.");
+  if (!memberRes.data) throw new AppError(403, "sem_permissao", "Seu usuário não tem acesso a esta plataforma.");
+  return { id: authUser.id, email: authUser.email, role: memberRes.data.role };
+}
+
 function needAdmin(u: Member) {
   if (u.role !== "admin") throw new AppError(403, "somente_admin", "Somente administradores podem fazer essa alteração.");
 }
@@ -155,10 +195,12 @@ const dbErr = (msg: string) => new AppError(500, "db", msg);
 
 // ---------- ações: equipe ----------
 async function team() {
-  const ids = await memberIds();
-  const { data, error } = await sb.auth.admin.listUsers({ page: 1, perPage: 200 });
-  if (error) throw dbErr("Erro ao ler a equipe.");
-  const members = data.users.filter((u) => ids.has(u.id)).map((u) => ({ id: u.id, email: u.email ?? "" }));
+  const [ids, res] = await Promise.all([
+    memberIds(),
+    sb.auth.admin.listUsers({ page: 1, perPage: 200 }),
+  ]);
+  if (res.error) throw dbErr("Erro ao ler a equipe.");
+  const members = res.data.users.filter((u) => ids.has(u.id)).map((u) => ({ id: u.id, email: u.email ?? "" }));
   return { members };
 }
 
@@ -233,6 +275,15 @@ async function contactsList() {
   if (error) throw dbErr("Erro ao listar os contatos.");
   return { contacts: data };
 }
+async function bootstrap(u: Member) {
+  const [t, tasks, contacts] = await Promise.all([team(), tasksList(), contactsList()]);
+  return {
+    user: { id: u.id, email: u.email, role: u.role },
+    members: t.members,
+    tasks: tasks.tasks,
+    contacts: contacts.contacts,
+  };
+}
 async function contactGet(i: any) {
   const id = uuid(i.id, "ID do cliente");
   const { data: contact, error } = await sb.from("crm_contacts").select("*").eq("id", id).maybeSingle();
@@ -305,14 +356,16 @@ async function interactionAdd(i: any, u: Member) {
 }
 
 const WRITE = ["task_create", "task_update", "task_delete", "contact_create", "contact_update", "contact_delete", "interaction_add"];
-const READ = ["me", "team", "tasks_list", "contacts_list", "contact_get"];
+const READ = ["me", "team", "tasks_list", "contacts_list", "contact_get", "bootstrap"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   try {
     if (req.method !== "POST") throw new AppError(405, "metodo", "Método não permitido. Use POST.");
-    await rateLimit(`ops-ip:${clientIp(req)}`, LIMITS.ip);
-    const user = await authenticate(req);
+    const h = req.headers.get("authorization") ?? "";
+    const token = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
+    if (!token) throw new AppError(401, "nao_autenticado", "Faça login para continuar.");
+
     const len = Number(req.headers.get("content-length") ?? 0);
     if (len > 20000) throw new AppError(413, "grande_demais", "Requisição grande demais.");
     let input: any;
@@ -322,9 +375,11 @@ Deno.serve(async (req) => {
     if (typeof action !== "string" || (!WRITE.includes(action) && !READ.includes(action))) {
       throw new AppError(400, "acao_invalida", "Ação inválida.");
     }
-    await rateLimit(`ops-${WRITE.includes(action) ? "w" : "r"}:${user.id}`, WRITE.includes(action) ? LIMITS.write : LIMITS.read);
+
+    const user = await authorizeRequest(req, token, WRITE.includes(action));
     switch (action) {
       case "me": return json({ user: { id: user.id, email: user.email, role: user.role } });
+      case "bootstrap": return json(await bootstrap(user));
       case "team": return json(await team());
       case "tasks_list": return json(await tasksList());
       case "task_create": return json(await taskCreate(input, user), 201);
