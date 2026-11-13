@@ -146,6 +146,13 @@ strong, b { font-weight: 600; }
   .td { padding: .625rem .375rem; border-bottom: 1px solid var(--grid); font-size: .875rem; vertical-align: top; }
 }
 
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.col-scroll { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.col-scroll::-webkit-scrollbar { width: 5px; }
+.col-scroll::-webkit-scrollbar-track { background: transparent; }
+.col-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+
 .skeleton { background: var(--grid); border-radius: 14px; animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .5; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } .btn { transition: none; } }
