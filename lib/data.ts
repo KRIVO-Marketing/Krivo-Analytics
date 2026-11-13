@@ -3,7 +3,7 @@ import { ApiError, apiRead, opsCall } from "./api";
 import type { Me } from "./auth";
 import { cachedFetch, getCached, setCached } from "./cache";
 import type { Contact, Member, Task } from "./ops";
-import type { Goal, Info, Metrics, Property } from "./types";
+import type { Goal, Info, Metrics, Property, RealtimeMetrics } from "./types";
 
 const METRICS_TTL_MS = 5 * 60_000;
 
@@ -61,6 +61,9 @@ export const fetchMetrics = (propertyId: string, days: number, options?: { force
     () => apiRead<Metrics>({ action: "metrics", id: propertyId, days }, options?.signal),
     { ttlMs: METRICS_TTL_MS, force: options?.force },
   );
+
+export const fetchRealtime = (propertyId: string, signal?: AbortSignal) =>
+  apiRead<RealtimeMetrics>({ action: "realtime", id: propertyId }, signal);
 
 export function updateTasksCache(updater: (prev: Task[]) => Task[]) {
   const prev = getCached<Task[]>(CACHE_KEYS.tasks) ?? [];
