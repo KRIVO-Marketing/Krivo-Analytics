@@ -126,6 +126,7 @@ async function ga(pid: string, method: string, body: unknown) {
       "A conta de serviço não tem acesso a essa propriedade. No Google Analytics, adicione o e-mail da conta de serviço como Leitor (Viewer).");
   }
   if (r.status === 400 || r.status === 404) {
+    console.error("ga_error", method, r.status, await r.text());
     throw new AppError(422, "propriedade_invalida", "O Google não reconheceu esse ID de propriedade GA4.");
   }
   throw new AppError(502, "google_erro", "Erro ao consultar o Google Analytics. Tente novamente.");
@@ -431,7 +432,9 @@ async function realtime(i: any) {
   const pid = prop.property_id;
   const [totRep, pagesRep, evRep] = await Promise.all([
     ga(pid, "runRealtimeReport", {
+      dimensions: [{ name: "deviceCategory" }],
       metrics: [{ name: "activeUsers" }, { name: "screenPageViews" }, { name: "eventCount" }],
+      metricAggregations: ["TOTAL"],
     }),
     ga(pid, "runRealtimeReport", {
       dimensions: [{ name: "unifiedScreenName" }],
@@ -440,19 +443,23 @@ async function realtime(i: any) {
     }),
     ga(pid, "runRealtimeReport", {
       dimensions: [{ name: "eventName" }],
-      metrics: [{ name: "eventCount" }, { name: "activeUsers" }],
+      metrics: [{ name: "eventCount" }],
       limit: 10,
     }),
   ]);
-  const totRow = totRep?.rows?.[0]?.metricValues?.map((x: any) => Number(x.value)) ?? [0, 0, 0];
+  const totVals = totRep?.totals?.[0]?.metricValues?.map((x: any) => Number(x.value));
+  const devRows = rows(totRep);
+  const activeUsers = totVals?.[0] ?? devRows.reduce((a: number, r: any) => a + r.m[0], 0);
+  const pageviews = totVals?.[1] ?? devRows.reduce((a: number, r: any) => a + r.m[1], 0);
+  const events = totVals?.[2] ?? devRows.reduce((a: number, r: any) => a + r.m[2], 0);
   return {
     generated_at: new Date().toISOString(),
     window_minutes: 30,
-    active_users: totRow[0] ?? 0,
-    pageviews: totRow[1] ?? 0,
-    events: totRow[2] ?? 0,
+    active_users: activeUsers,
+    pageviews,
+    events,
     pages: rows(pagesRep).map((r: any) => ({ title: r.d[0], users: r.m[0], views: r.m[1] })),
-    top_events: rows(evRep).map((r: any) => ({ name: r.d[0], count: r.m[0], users: r.m[1] })),
+    top_events: rows(evRep).map((r: any) => ({ name: r.d[0], count: r.m[0], users: 0 })),
   };
 }
 
