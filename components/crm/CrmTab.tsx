@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type TouchEvent } from "react";
 import { opsCall } from "@/lib/api";
 import { getCached, subscribeCache } from "@/lib/cache";
 import { CACHE_KEYS, fetchContacts, updateContactsCache } from "@/lib/data";
@@ -18,9 +18,14 @@ export default function CrmTab() {
   const [loading, setLoading] = useState(() => getCached<Contact[]>(CACHE_KEYS.contacts) === undefined);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("todos");
+  const [onlyFollowUp, setOnlyFollowUp] = useState(false);
   const [q, setQ] = useState("");
   const [openState, setOpenState] = useState<{ id: string; askLoss?: boolean } | null>(null);
   const [form, setForm] = useState<Contact | "new" | null>(null);
+  const [over, setOver] = useState<Stage | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const dragId = useRef<string | null>(null);
+  const kanbanRef = useRef<HTMLDivElement | null>(null);
 
   const byId = useMemo(() => new Map(team.map((m) => [m.id, m])), [team]);
 
@@ -50,19 +55,25 @@ export default function CrmTab() {
   const today = todayISO();
   const isFollowUp = (c: Contact) => !!c.next_contact_at && c.next_contact_at <= today && c.stage !== "fechado" && c.stage !== "perdido";
 
-  const shown = useMemo(() => {
+  const searchFiltered = useMemo(() => {
     const t = q.trim().toLowerCase();
     return contacts.filter((c) => {
-      if (filter === "retornar" ? !isFollowUp(c) : filter !== "todos" && c.stage !== filter) return false;
+      if (onlyFollowUp && !isFollowUp(c)) return false;
       return !t || [c.name, c.company, c.niche, c.city, c.phone, c.instagram].some((v) => v?.toLowerCase().includes(t));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contacts, filter, q, today]);
+  }, [contacts, q, onlyFollowUp, today]);
+
+  const shown = useMemo(() => {
+    return searchFiltered.filter((c) => (filter === "retornar" ? isFollowUp(c) : filter === "todos" || c.stage === filter));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchFiltered, filter, today]);
 
   const count = (f: Filter) =>
     f === "todos" ? contacts.length : f === "retornar" ? contacts.filter(isFollowUp).length : contacts.filter((c) => c.stage === f).length;
 
   const totalValue = useMemo(() => shown.reduce((sum, c) => sum + (c.value != null ? Number(c.value) || 0 : 0), 0), [shown]);
+  const kanbanValue = useMemo(() => searchFiltered.reduce((sum, c) => sum + (c.value != null ? Number(c.value) || 0 : 0), 0), [searchFiltered]);
 
   const quickStage = async (c: Contact, stage: Stage) => {
     if (stage === c.stage) return;
@@ -78,6 +89,40 @@ export default function CrmTab() {
     } catch (e) {
       setError((e as Error).message);
       load(true);
+    }
+  };
+
+  const handleDropToStage = (targetStage: Stage) => {
+    const id = dragId.current;
+    dragId.current = null;
+    setDraggingId(null);
+    setOver(null);
+    if (!id) return;
+    const c = contacts.find((x) => x.id === id);
+    if (c && c.stage !== targetStage) quickStage(c, targetStage);
+  };
+
+  const handleTouchDragMove = (e: TouchEvent) => {
+    const t = e.touches[0];
+    if (!t || !dragId.current) return;
+    const board = kanbanRef.current;
+    if (board) {
+      const rect = board.getBoundingClientRect();
+      if (t.clientX < rect.left + 44) board.scrollLeft -= 14;
+      else if (t.clientX > rect.right - 44) board.scrollLeft += 14;
+    }
+    const el = document.elementFromPoint(t.clientX, t.clientY)?.closest("[data-stage-col]");
+    const st = el?.getAttribute("data-stage-col") as Stage | null;
+    setOver(st ?? null);
+  };
+
+  const handleTouchDragEnd = () => {
+    if (over) {
+      handleDropToStage(over);
+    } else {
+      dragId.current = null;
+      setDraggingId(null);
+      setOver(null);
     }
   };
 
@@ -100,7 +145,7 @@ export default function CrmTab() {
       <ChipRow
         label="Estágio"
         value={filter}
-        onChange={setFilter}
+        onChange={(next) => setFilter((prev) => (prev === next && next !== "todos" ? "todos" : next))}
         items={[
           { id: "todos", label: "Todos", count: count("todos") },
           { id: "retornar", label: "Retornar", count: count("retornar"), color: "#b42318" },
@@ -109,32 +154,146 @@ export default function CrmTab() {
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-mute">
-        <span>
-          {shown.length} {shown.length === 1 ? "contato" : "contatos"}
-        </span>
-        {totalValue > 0 && <span>Potencial: <b className="font-medium text-ink">{brl(totalValue)}</b></span>}
+        {filter === "todos" ? (
+          <span>
+            {searchFiltered.length} {searchFiltered.length === 1 ? "contato" : "contatos"}
+            {kanbanValue > 0 && <> · Pipeline: <b className="font-medium text-ink">{brl(kanbanValue)}</b></>}
+          </span>
+        ) : (
+          <span>
+            {shown.length} {shown.length === 1 ? "contato" : "contatos"}
+            {totalValue > 0 && <> · Potencial: <b className="font-medium text-ink">{brl(totalValue)}</b></>}
+          </span>
+        )}
+        <button
+          type="button"
+          aria-pressed={onlyFollowUp}
+          onClick={() => setOnlyFollowUp((v) => !v)}
+          className={`btn min-h-9 rounded-full px-4 text-xs ${onlyFollowUp ? "btn-primary" : ""}`}
+        >
+          {onlyFollowUp ? "✓ Só retornos" : `Só retornos (${count("retornar")})`}
+        </button>
       </div>
 
       {error && <ErrorBox message={error} onRetry={() => load(true)} />}
 
-      {shown.length === 0 ? (
-        <EmptyState
-          title={contacts.length ? "Nenhum cliente neste filtro" : "Nenhum cliente cadastrado ainda"}
-          hint={contacts.length ? undefined : "Toque em “+ Novo” para cadastrar o primeiro."}
-        />
+      {filter !== "todos" ? (
+        shown.length === 0 ? (
+          <EmptyState
+            title={contacts.length ? "Nenhum cliente neste filtro" : "Nenhum cliente cadastrado ainda"}
+            hint={contacts.length ? "Toque em \"Todos\" para voltar ao Kanban." : "Toque em “+ Novo” para cadastrar o primeiro."}
+          />
+        ) : (
+          <ul className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3">
+            {shown.map((c) => (
+              <ContactCard
+                key={c.id}
+                c={c}
+                owner={c.owner_id ? byId.get(c.owner_id) : undefined}
+                followUp={isFollowUp(c)}
+                onOpen={() => setOpenState({ id: c.id })}
+                onQuickStage={(stage) => quickStage(c, stage)}
+              />
+            ))}
+          </ul>
+        )
       ) : (
-        <ul className="grid gap-2.5 md:grid-cols-2 lg:grid-cols-3">
-          {shown.map((c) => (
-            <ContactCard
-              key={c.id}
-              c={c}
-              owner={c.owner_id ? byId.get(c.owner_id) : undefined}
-              followUp={isFollowUp(c)}
-              onOpen={() => setOpenState({ id: c.id })}
-              onQuickStage={(stage) => quickStage(c, stage)}
-            />
-          ))}
-        </ul>
+        <div
+          ref={kanbanRef}
+          className="grid grid-flow-col auto-cols-[minmax(265px,82vw)] gap-3.5 overflow-x-auto pb-3 lg:auto-cols-[minmax(275px,1fr)]"
+        >
+          {STAGES.map((s) => {
+            const list = searchFiltered.filter((c) => c.stage === s.id);
+            const colVal = list.reduce((sum, c) => sum + (c.value != null ? Number(c.value) || 0 : 0), 0);
+            const isOver = over === s.id;
+            return (
+              <section
+                key={s.id}
+                data-stage-col={s.id}
+                aria-label={s.label}
+                style={{
+                  borderColor: isOver ? s.color : `color-mix(in srgb, ${s.color} 22%, var(--line))`,
+                  background: isOver
+                    ? `color-mix(in srgb, ${s.color} 12%, var(--card))`
+                    : `color-mix(in srgb, ${s.color} 4%, var(--card))`,
+                }}
+                className="flex min-w-0 flex-col rounded-2xl border p-3 transition"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setOver(s.id);
+                }}
+                onDragLeave={() => setOver((o) => (o === s.id ? null : o))}
+                onDrop={() => handleDropToStage(s.id)}
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFilter(s.id)}
+                      title={`Filtrar apenas ${s.label}`}
+                      style={{
+                        background: `color-mix(in srgb, ${s.color} 18%, transparent)`,
+                        color: s.color,
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-semibold uppercase tracking-wide transition hover:opacity-85"
+                    >
+                      <span className="h-2 w-2 rounded-full" style={{ background: s.color }} aria-hidden />
+                      <span className="truncate">{s.label}</span>
+                    </button>
+                    <span className="text-xs font-medium text-mute tabular-nums">{list.length}</span>
+                  </div>
+                  {colVal > 0 && (
+                    <span className="shrink-0 text-xs font-medium text-mute tabular-nums">{brl(colVal)}</span>
+                  )}
+                </div>
+
+                <ul className="space-y-2.5">
+                  {list.map((c) => (
+                    <ContactCard
+                      key={c.id}
+                      c={c}
+                      draggable
+                      isDragging={draggingId === c.id}
+                      owner={c.owner_id ? byId.get(c.owner_id) : undefined}
+                      followUp={isFollowUp(c)}
+                      onOpen={() => setOpenState({ id: c.id })}
+                      onQuickStage={(stage) => quickStage(c, stage)}
+                      onDragStart={() => {
+                        dragId.current = c.id;
+                        setDraggingId(c.id);
+                      }}
+                      onDragEnd={() => {
+                        dragId.current = null;
+                        setDraggingId(null);
+                        setOver(null);
+                      }}
+                      onTouchDragStart={() => {
+                        dragId.current = c.id;
+                        setDraggingId(c.id);
+                      }}
+                      onTouchDragMove={handleTouchDragMove}
+                      onTouchDragEnd={handleTouchDragEnd}
+                    />
+                  ))}
+                </ul>
+
+                {list.length === 0 && (
+                  <div className="rounded-xl border border-dashed border-line/80 p-4 text-center text-xs text-mute">
+                    Arraste um contato para cá
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setForm("new")}
+                  className="mt-2.5 flex w-full items-center gap-1.5 rounded-xl px-2.5 py-2 text-xs font-medium text-mute transition hover:bg-[var(--grid)] hover:text-ink"
+                >
+                  <span aria-hidden>+</span> Adicionar contato
+                </button>
+              </section>
+            );
+          })}
+        </div>
       )}
 
       {openState && (

@@ -107,8 +107,10 @@ export default function GoalCard() {
 
   const target = Number(goal.target);
   const current = Number(goal.current);
-  const pct = Math.min(100, Math.floor((current / target) * 100));
-  const done = !!goal.achieved_at;
+  const pct = target > 0 ? Math.floor((current / target) * 100) : 0;
+  const barPct = Math.min(100, Math.max(0, pct));
+  const done = !!goal.achieved_at || current >= target;
+  const exceeded = Math.max(0, current - target);
 
   return (
     <section className="card p-4 sm:p-5" aria-label="Meta de lucro">
@@ -154,14 +156,16 @@ export default function GoalCard() {
       >
         <div
           className="h-full rounded-full transition-[width] duration-700"
-          style={{ width: `${pct}%`, background: done ? "var(--pos)" : "var(--accent)" }}
+          style={{ width: `${barPct}%`, background: done ? "var(--pos)" : "var(--accent)" }}
         />
       </div>
       <p className="mt-2.5 text-sm" role="status">
         {done ? (
           <span className="inline-flex items-center gap-1.5 font-semibold text-pos">
             <IconCheck size={15} />
-            Meta batida! Parabéns!
+            {exceeded > 0
+              ? `Meta superada! ${brl(exceeded)} acima da meta`
+              : "Meta batida! Parabéns!"}
           </span>
         ) : (
           <span className="text-mute">
