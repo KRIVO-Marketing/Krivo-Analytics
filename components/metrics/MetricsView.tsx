@@ -3,11 +3,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getCached } from "@/lib/cache";
 import { CACHE_KEYS, fetchMetrics } from "@/lib/data";
 import { dec1, diaMes, hora, num } from "@/lib/format";
-import { eventInfo, pageLabel, sourceInfo } from "@/lib/translate";
+import { eventInfo, groupPages, isTechnicalEvent, pageLabel } from "@/lib/translate";
 import type { Metrics } from "@/lib/types";
 import LineChart, { type SeriesKey } from "../LineChart";
 import { ErrorBox } from "../ui";
-import { Change, MetricsInsights, MetricsSkeleton, MetricsSummary, Section, StatCard } from "./MetricsParts";
+import { ChannelBreakdown } from "./ChannelBreakdown";
+import { Change, MetricsDigest, MetricsSkeleton, Section, StatCard } from "./MetricsParts";
 
 const PERIODS = [7, 14, 28, 90];
 const CTA_HINT = "Defina o evento do botão no cadastro para acompanhar cliques";
@@ -52,6 +53,9 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
   const cta = data?.property.cta_event ?? null;
   const hasCta = !!data && data.totals.cta_clicks !== null;
   const empty = !!data && data.totals.sessions === 0 && data.totals.events === 0 && data.sources.length === 0;
+  const pages = data ? groupPages(data.pages) : [];
+  const valueEvents = data ? data.events.filter((ev) => ev.name === cta || !isTechnicalEvent(ev.name)) : [];
+  const techEvents = data ? data.events.filter((ev) => ev.name !== cta && isTechnicalEvent(ev.name)) : [];
 
   return (
     <div className="space-y-4">
@@ -97,36 +101,37 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
       {data && !empty && (
         <>
           <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4 lg:gap-3">
-            <StatCard label="Sessões" help="Quantas vezes o site foi acessado. A mesma pessoa pode gerar várias." value={num(data.totals.sessions)}>
-              <Change v={data.change_pct.sessions} />
-            </StatCard>
-            <StatCard label="Visitantes" help="Quantas pessoas diferentes visitaram o site." value={num(data.totals.users)}>
+            <StatCard label="Visitantes" help="Pessoas únicas que acessaram o site." value={num(data.totals.users)}>
               <Change v={data.change_pct.users} />
             </StatCard>
-            <StatCard label="Páginas vistas" help="Quantas páginas foram abertas, somando todas as visitas." value={num(data.totals.pageviews)}>
-              <Change v={data.change_pct.pageviews} />
+            <StatCard label="Sessões" help={`${num(data.totals.pageviews)} visualizações de página no período.`} value={num(data.totals.sessions)}>
+              <Change v={data.change_pct.sessions} />
             </StatCard>
             {hasCta ? (
-              <StatCard
-                label={data.property.cta_label ?? "Cliques no botão"}
-                help={`Pessoas que clicaram${data.property.cta_label ? "" : " no botão principal"} (${
-                  data.totals.cta_users !== null ? `${num(data.totals.cta_users)} pessoas` : `evento ${cta}`
-                }). É o clique, não o resultado final.`}
-                value={num(data.totals.cta_clicks!)}
-                accent
-              >
-                <span className="text-xs sm:text-sm text-mute">
-                  {data.totals.cta_rate !== null && (
-                    <>
-                      <b className="text-accent">{dec1(data.totals.cta_rate)}%</b> dos visitantes
-                    </>
-                  )}
-                </span>
-              </StatCard>
+              <>
+                <StatCard
+                  label={data.property.cta_label ?? "Cliques no botão"}
+                  help={data.totals.cta_users !== null ? `${num(data.totals.cta_users)} pessoas únicas clicaram.` : `Evento ${cta}.`}
+                  value={num(data.totals.cta_clicks!)}
+                  accent
+                >
+                  <span className="text-xs sm:text-sm text-mute">
+                    {data.totals.cta_users !== null ? `${num(data.totals.cta_users)} pessoas` : "cliques"}
+                  </span>
+                </StatCard>
+                <StatCard label="Taxa de conversão" help="De cada 100 visitantes, quantos clicaram no botão principal." value={data.totals.cta_rate !== null ? `${dec1(data.totals.cta_rate)}%` : "–"} accent>
+                  <span className="text-xs sm:text-sm text-mute">dos visitantes</span>
+                </StatCard>
+              </>
             ) : (
-              <div className="card flex items-center p-3.5 sm:p-4">
-                <p className="text-xs sm:text-sm text-mute">{CTA_HINT}</p>
-              </div>
+              <>
+                <StatCard label="Páginas vistas" help="Total de páginas abertas em todas as visitas." value={num(data.totals.pageviews)}>
+                  <Change v={data.change_pct.pageviews} />
+                </StatCard>
+                <div className="card flex items-center p-3.5 sm:p-4">
+                  <p className="text-xs sm:text-sm text-mute">{CTA_HINT}</p>
+                </div>
+              </>
             )}
           </div>
 
@@ -154,8 +159,9 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
             <LineChart daily={data.daily} series={series} />
           </Section>
 
-          <MetricsSummary data={data} />
-          <MetricsInsights data={data} />
+          <MetricsDigest data={data} />
+
+          <ChannelBreakdown sources={data.sources} hasCta={hasCta} />
 
           {data.funnel.length > 0 && (
             <Section title="Do acesso ao clique" sub="Quantas pessoas chegaram em cada etapa da visita.">
@@ -183,51 +189,8 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
             </Section>
           )}
 
-          <Section title="De onde vieram os visitantes" sub="Por qual caminho as pessoas chegaram ao site.">
-            {data.sources.length === 0 ? (
-              <p className="text-mute">Sem origens neste período.</p>
-            ) : (
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th className="th">Origem</th>
-                    <th className="th text-right">Sessões</th>
-                    <th className="th hidden text-right sm:table-cell">%</th>
-                    {hasCta && (
-                      <th className="th text-right text-accent">
-                        Cliques<span className="hidden sm:inline"> no botão</span>
-                      </th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.sources.map((s, i) => {
-                    const maxS = data.sources[0].sessions || 1;
-                    return (
-                      <tr key={i}>
-                        <td className="td min-w-0 break-words">
-                          <b className="font-medium">{sourceInfo(s.source, s.medium).label}</b>{" "}
-                          <span className="text-mute">· {sourceInfo(s.source, s.medium).detail}</span>
-                          <div className="mt-1.5 h-1.5 rounded-r-full bg-[var(--grid)]" aria-hidden>
-                            <div className="h-1.5 rounded-r-full bg-soft" style={{ width: `${(s.sessions / maxS) * 100}%` }} />
-                          </div>
-                        </td>
-                        <td className="td text-right">
-                          {num(s.sessions)}
-                          <span className="block text-xs text-mute sm:hidden">{dec1(s.share)}%</span>
-                        </td>
-                        <td className="td hidden text-right sm:table-cell">{dec1(s.share)}%</td>
-                        {hasCta && <td className="td text-right font-medium text-accent">{s.cta_clicks === null ? "–" : num(s.cta_clicks)}</td>}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </Section>
-
           <div className="grid gap-4 lg:grid-cols-2">
-            <Section title="Páginas mais vistas" sub="O que as pessoas mais abriram no site.">
+            <Section title="Páginas mais acessadas" sub="URLs limpas e agrupadas por caminho.">
               <table className="w-full border-collapse">
                 <thead>
                   <tr>
@@ -237,8 +200,8 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
                   </tr>
                 </thead>
                 <tbody>
-                  {data.pages.map((p, i) => (
-                    <tr key={i}>
+                  {pages.map((p) => (
+                    <tr key={p.path}>
                       <td className="td break-all">
                         {pageLabel(p.path)}
                         {pageLabel(p.path) !== p.path && <span className="block text-xs text-mute">{p.path}</span>}
@@ -253,40 +216,58 @@ export default function MetricsView({ propertyId, title }: { propertyId: string;
                 </tbody>
               </table>
             </Section>
-            <Section title="O que as pessoas fizeram" sub="Ações registradas no site, com o nome técnico em cinza.">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr>
-                    <th className="th">Ação</th>
-                    <th className="th text-right">Vezes</th>
-                    <th className="th hidden text-right sm:table-cell">Visitantes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.events.map((ev, i) => {
-                    const isCta = !!cta && ev.name === cta;
-                    return (
-                      <tr key={i} className={isCta ? "bg-accent-soft" : ""}>
-                        <td className="td break-all">
-                          <span className={isCta ? "font-medium text-accent" : ""}>
-                            {isCta ? data.property.cta_label ?? "Clique no botão" : eventInfo(ev.name).label}
-                          </span>
-                          {isCta && <span className="ml-2 rounded-full border border-accent px-2 py-0.5 text-xs text-accent">botão principal</span>}
-                          <span className="block text-xs text-mute">
-                            {ev.name}
-                            {eventInfo(ev.name).hint && !isCta ? ` · ${eventInfo(ev.name).hint}` : ""}
-                          </span>
-                        </td>
-                        <td className="td text-right">
-                          {num(ev.count)}
-                          <span className="block text-xs text-mute sm:hidden">{num(ev.users)} pessoas</span>
-                        </td>
-                        <td className="td hidden text-right sm:table-cell">{num(ev.users)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+
+            <Section title="Ações de valor no site" sub="Interações reais, sem ruído técnico do GA4.">
+              {valueEvents.length === 0 ? (
+                <p className="text-sm text-mute">Nenhuma ação de intenção registrada neste período.</p>
+              ) : (
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="th">Ação</th>
+                      <th className="th text-right">Vezes</th>
+                      <th className="th hidden text-right sm:table-cell">Visitantes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {valueEvents.map((ev) => {
+                      const isCta = !!cta && ev.name === cta;
+                      return (
+                        <tr key={ev.name} className={isCta ? "bg-accent-soft" : ""}>
+                          <td className="td break-all">
+                            <span className={isCta ? "font-medium text-accent" : ""}>
+                              {isCta ? data.property.cta_label ?? "Clique no botão" : eventInfo(ev.name).label}
+                            </span>
+                            {isCta && <span className="ml-2 rounded-full border border-accent px-2 py-0.5 text-xs text-accent">botão principal</span>}
+                            {eventInfo(ev.name).hint && !isCta && (
+                              <span className="block text-xs text-mute">{eventInfo(ev.name).hint}</span>
+                            )}
+                          </td>
+                          <td className="td text-right">
+                            {num(ev.count)}
+                            <span className="block text-xs text-mute sm:hidden">{num(ev.users)} pessoas</span>
+                          </td>
+                          <td className="td hidden text-right sm:table-cell">{num(ev.users)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+
+              {techEvents.length > 0 && (
+                <details className="mt-3 text-xs text-mute">
+                  <summary className="cursor-pointer">Eventos técnicos do GA4 ({techEvents.length})</summary>
+                  <ul className="mt-2 space-y-1 border-t border-line pt-2">
+                    {techEvents.map((ev) => (
+                      <li key={ev.name} className="flex justify-between gap-2">
+                        <span>{eventInfo(ev.name).label} ({ev.name})</span>
+                        <span>{num(ev.count)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
             </Section>
           </div>
         </>
