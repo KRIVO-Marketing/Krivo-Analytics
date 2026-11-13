@@ -1,4 +1,5 @@
 "use client";
+import { prefetchContactDetail } from "@/lib/data";
 import { brl, dueInfo, STAGES, stageOf, waLink, type Contact, type Member, type Stage } from "@/lib/ops";
 import { Avatar, Pill } from "../opsui";
 
@@ -22,7 +23,14 @@ export function ContactCard({ c, owner, followUp, onOpen, onQuickStage }: Props)
       }`}
     >
       <div className="flex items-stretch">
-        <button type="button" onClick={onOpen} className="min-w-0 flex-1 p-3.5 text-left">
+        <button
+          type="button"
+          onMouseEnter={() => prefetchContactDetail(c.id)}
+          onFocus={() => prefetchContactDetail(c.id)}
+          onTouchStart={() => prefetchContactDetail(c.id)}
+          onClick={onOpen}
+          className="min-w-0 flex-1 p-3.5 text-left"
+        >
           <div className="flex items-start justify-between gap-2">
             <span className="block truncate text-base font-normal">{c.name}</span>
             <Avatar m={owner} size={24} />

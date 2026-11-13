@@ -2,10 +2,17 @@
 import { ApiError, apiRead, opsCall } from "./api";
 import type { Me } from "./auth";
 import { cachedFetch, getCached, setCached } from "./cache";
-import type { Contact, Member, Task } from "./ops";
+import type { Contact, Interaction, Member, Task } from "./ops";
 import type { Goal, Info, Metrics, Property, RealtimeMetrics } from "./types";
 
 const METRICS_TTL_MS = 5 * 60_000;
+const CONTACT_TTL_MS = 2 * 60_000;
+
+export type ContactDetail = {
+  contact: Contact;
+  interactions: Interaction[];
+  tasks: { id: string; title: string; status: string; due_date: string | null }[];
+};
 
 export const CACHE_KEYS = {
   team: "team",
@@ -15,6 +22,7 @@ export const CACHE_KEYS = {
   info: "info",
   goals: "goals",
   metrics: (propertyId: string, days: number) => `metrics:${propertyId}:${days}`,
+  contactDetail: (id: string) => `contact:${id}`,
 } as const;
 
 export const fetchTeam = (force = false) =>
@@ -58,9 +66,26 @@ export const fetchGoals = (force = false) =>
 export const fetchMetrics = (propertyId: string, days: number, options?: { force?: boolean; signal?: AbortSignal }) =>
   cachedFetch(
     CACHE_KEYS.metrics(propertyId, days),
-    () => apiRead<Metrics>({ action: "metrics", id: propertyId, days }, options?.signal),
+    () => apiRead<Metrics>({ action: "metrics", id: propertyId, days, force: !!options?.force }, options?.signal),
     { ttlMs: METRICS_TTL_MS, force: options?.force },
   );
+
+export const prefetchMetrics = (propertyId: string, days = 28) => {
+  if (getCached<Metrics>(CACHE_KEYS.metrics(propertyId, days))) return;
+  void fetchMetrics(propertyId, days).catch(() => {});
+};
+
+export const fetchContactDetail = (id: string, force = false) =>
+  cachedFetch(
+    CACHE_KEYS.contactDetail(id),
+    () => opsCall<ContactDetail>({ action: "contact_get", id }),
+    { ttlMs: CONTACT_TTL_MS, force },
+  );
+
+export const prefetchContactDetail = (id: string) => {
+  if (getCached<ContactDetail>(CACHE_KEYS.contactDetail(id))) return;
+  void fetchContactDetail(id).catch(() => {});
+};
 
 export const fetchRealtime = (propertyId: string, signal?: AbortSignal) =>
   apiRead<RealtimeMetrics>({ action: "realtime", id: propertyId }, signal);

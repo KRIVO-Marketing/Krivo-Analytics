@@ -1,13 +1,16 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { opsCall } from "@/lib/api";
-import { brl, dueInfo, KINDS, nameOf, phoneFmt, prettyNote, STAGES, waLink, type Contact, type Interaction, type Member, type Stage } from "@/lib/ops";
+import { getCached, invalidateCache } from "@/lib/cache";
+import { CACHE_KEYS, fetchContactDetail, type ContactDetail } from "@/lib/data";
+import { brl, dueInfo, KINDS, nameOf, phoneFmt, prettyNote, STAGES, waLink, type Contact, type Member, type Stage } from "@/lib/ops";
 import { useMe } from "../AuthGate";
 import { FormError } from "../opsui";
 import { Modal } from "../ui";
 
 type Props = {
   id: string;
+  initialContact?: Contact;
   team: Member[];
   askLossInitially?: boolean;
   onClose: () => void;
@@ -16,9 +19,9 @@ type Props = {
   onDeleted: () => void;
 };
 
-export function ContactSheet({ id, team, askLossInitially = false, onClose, onChanged, onEdit, onDeleted }: Props) {
+export function ContactSheet({ id, initialContact, team, askLossInitially = false, onClose, onChanged, onEdit, onDeleted }: Props) {
   const { me } = useMe();
-  const [data, setData] = useState<{ contact: Contact; interactions: Interaction[]; tasks: { id: string; title: string; status: string; due_date: string | null }[] } | null>(null);
+  const [data, setData] = useState<ContactDetail | null>(() => getCached<ContactDetail>(CACHE_KEYS.contactDetail(id)) ?? null);
   const [err, setErr] = useState<string | null>(null);
   const [kind, setKind] = useState("nota");
   const [body, setBody] = useState("");
@@ -27,9 +30,9 @@ export function ContactSheet({ id, team, askLossInitially = false, onClose, onCh
   const [askLoss, setAskLoss] = useState(askLossInitially);
   const [confirmDel, setConfirmDel] = useState(false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     try {
-      setData(await opsCall({ action: "contact_get", id }));
+      setData(await fetchContactDetail(id, force));
       setErr(null);
     } catch (e) {
       setErr((e as Error).message);
@@ -42,7 +45,7 @@ export function ContactSheet({ id, team, askLossInitially = false, onClose, onCh
     setErr(null);
     try {
       await fn();
-      await load();
+      await load(true);
       onChanged();
     } catch (e) {
       setErr((e as Error).message);
@@ -69,7 +72,7 @@ export function ContactSheet({ id, team, askLossInitially = false, onClose, onCh
     });
   };
 
-  const c = data?.contact;
+  const c = data?.contact ?? initialContact;
   const owner = c?.owner_id ? team.find((m) => m.id === c.owner_id) : undefined;
 
   return (
@@ -166,11 +169,11 @@ export function ContactSheet({ id, team, askLossInitially = false, onClose, onCh
 
           {c.notes && <p className="whitespace-pre-wrap break-words rounded-2xl border border-line p-3.5 text-sm">{c.notes}</p>}
 
-          {data!.tasks.length > 0 && (
+          {data && data.tasks.length > 0 && (
             <div>
               <span className="label">Tarefas deste cliente</span>
               <ul className="space-y-1 text-sm">
-                {data!.tasks.map((t) => (
+                {data.tasks.map((t) => (
                   <li key={t.id} className={t.status === "concluida" ? "text-mute line-through" : ""}>• {t.title}</li>
                 ))}
               </ul>
@@ -205,18 +208,25 @@ export function ContactSheet({ id, team, askLossInitially = false, onClose, onCh
                 <button type="submit" className="btn btn-primary shrink-0" disabled={busy || !body.trim()}>Salvar</button>
               </div>
             </form>
-            <ul className="mt-3 space-y-2">
-              {data!.interactions.map((i) => (
-                <li key={i.id} className="rounded-xl border border-line border-l-4 border-l-[var(--soft)] p-3 text-sm">
-                  <span className="text-xs text-mute">
-                    {KINDS.find((k) => k.id === i.kind)?.label ?? i.kind} ·{" "}
-                    {new Date(i.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  </span>
-                  <p className="mt-0.5 whitespace-pre-wrap break-words">{prettyNote(i.body)}</p>
-                </li>
-              ))}
-              {data!.interactions.length === 0 && <li className="text-sm text-mute">Nenhum registro ainda.</li>}
-            </ul>
+            {!data ? (
+              <div className="mt-3 space-y-2" aria-busy="true" aria-label="Carregando histórico">
+                <div className="skeleton h-12" />
+                <div className="skeleton h-12" />
+              </div>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {data.interactions.map((i) => (
+                  <li key={i.id} className="rounded-xl border border-line border-l-4 border-l-[var(--soft)] p-3 text-sm">
+                    <span className="text-xs text-mute">
+                      {KINDS.find((k) => k.id === i.kind)?.label ?? i.kind} ·{" "}
+                      {new Date(i.created_at).toLocaleString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <p className="mt-0.5 whitespace-pre-wrap break-words">{prettyNote(i.body)}</p>
+                  </li>
+                ))}
+                {data.interactions.length === 0 && <li className="text-sm text-mute">Nenhum registro ainda.</li>}
+              </ul>
+            )}
           </div>
 
           <FormError message={err} />
@@ -233,6 +243,7 @@ export function ContactSheet({ id, team, askLossInitially = false, onClose, onCh
                       setErr(null);
                       try {
                         await opsCall({ action: "contact_delete", id });
+                        invalidateCache(CACHE_KEYS.contactDetail(id));
                         onDeleted();
                       } catch (e) {
                         setErr((e as Error).message);

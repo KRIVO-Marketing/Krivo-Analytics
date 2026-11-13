@@ -140,6 +140,7 @@ export default function CrmTab() {
       {openState && (
         <ContactSheet
           id={openState.id}
+          initialContact={contacts.find((x) => x.id === openState.id)}
           team={team}
           askLossInitially={openState.askLoss}
           onClose={() => setOpenState(null)}
