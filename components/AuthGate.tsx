@@ -1,8 +1,9 @@
 // Porta de entrada: nada do painel (nem a árvore de componentes, nem requisições) existe antes do login.
 "use client";
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { apiRead, registerAuthHandlers } from "@/lib/api";
 import { getAuth, getSiteUrl, type Me } from "@/lib/auth";
+import { invalidateCache } from "@/lib/cache";
 import Logo from "./Logo";
 
 const MeContext = createContext<{ me: Me; signOut: () => void } | null>(null);
@@ -14,6 +15,11 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   const [view, setView] = useState<View>("loading");
   const [me, setMe] = useState<Me | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const viewRef = useRef<View>("loading");
+  const meRef = useRef<Me | null>(null);
+  const loadingUserRef = useRef<string | null>(null);
+  viewRef.current = view;
+  meRef.current = me;
 
   const signOut = useCallback(() => { void getAuth().signOut(); }, []);
 
@@ -21,28 +27,64 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const { data } = getAuth().onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") { setView("recovery"); return; }
-      if (event === "SIGNED_OUT" || !session) { setMe(null); setView("login"); return; }
+      if (event === "SIGNED_OUT" || !session) {
+        loadingUserRef.current = null;
+        meRef.current = null;
+        invalidateCache();
+        setMe(null);
+        setView("login");
+        return;
+      }
       if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
-        setView((v) => (v === "recovery" ? v : "loading"));
-        setTimeout(() => loadMe(), 0);
+        if (viewRef.current === "recovery") return;
+        const uid = session.user.id;
+        // Evita desmontar o painel e recarregar tudo quando o supabase-js reemite SIGNED_IN ao voltar para a aba.
+        if (viewRef.current === "panel" && meRef.current?.id === uid) return;
+        if (loadingUserRef.current === uid) return;
+        if (meRef.current && meRef.current.id !== uid) {
+          invalidateCache();
+          meRef.current = null;
+          setMe(null);
+        }
+        loadingUserRef.current = uid;
+        setView("loading");
+        setTimeout(() => loadMe(uid), 0);
       }
     });
     registerAuthHandlers({
-      onExpired: () => { setNotice("Sua sessão expirou. Entre novamente."); void getAuth().signOut(); },
-      onForbidden: () => { setMe(null); setView("forbidden"); },
+      onExpired: () => {
+        invalidateCache();
+        setNotice("Sua sessão expirou. Entre novamente.");
+        void getAuth().signOut();
+      },
+      onForbidden: () => {
+        loadingUserRef.current = null;
+        meRef.current = null;
+        invalidateCache();
+        setMe(null);
+        setView("forbidden");
+      },
     });
     return () => { data.subscription.unsubscribe(); registerAuthHandlers(null); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function loadMe() {
+  async function loadMe(expectedUserId?: string) {
     try {
       const r = await apiRead<{ user: Me }>({ action: "me" });
+      if (expectedUserId && loadingUserRef.current !== expectedUserId) return;
+      meRef.current = r.user;
       setMe(r.user);
       setView((v) => (v === "recovery" ? v : "panel"));
     } catch {
       /* 401/403 já tratados pelos handlers; outros erros: volta ao login sem expor detalhes */
-      setView((v) => (v === "forbidden" || v === "login" ? v : "login"));
+      if (!expectedUserId || loadingUserRef.current === expectedUserId) {
+        setView((v) => (v === "forbidden" || v === "login" ? v : "login"));
+      }
+    } finally {
+      if (!expectedUserId || loadingUserRef.current === expectedUserId) {
+        loadingUserRef.current = null;
+      }
     }
   }
 
