@@ -6,6 +6,7 @@ import { CACHE_KEYS, fetchGoals } from "@/lib/data";
 import { brl, parseBrl } from "@/lib/format";
 import type { Goal } from "@/lib/types";
 import { useMe } from "../AuthGate";
+import { IconCheck } from "../Icons";
 import { ErrorBox, Modal } from "../ui";
 
 type Mode = "profit" | "new" | "edit" | null;
@@ -158,7 +159,10 @@ export default function GoalCard() {
       </div>
       <p className="mt-2.5 text-sm" role="status">
         {done ? (
-          <span className="font-semibold text-pos">🎉 Meta batida! Parabéns!</span>
+          <span className="inline-flex items-center gap-1.5 font-semibold text-pos">
+            <IconCheck size={15} />
+            Meta batida! Parabéns!
+          </span>
         ) : (
           <span className="text-mute">
             Faltam <b className="font-medium text-ink">{brl(Math.max(0, target - current))}</b> para bater a meta
@@ -172,10 +176,13 @@ export default function GoalCard() {
             {showPast ? "Esconder metas anteriores" : `Ver metas anteriores (${past.length})`}
           </button>
           {showPast && (
-            <ul className="mt-2 space-y-1 text-sm">
+            <ul className="mt-2 space-y-1.5 text-sm">
               {past.map((g) => (
-                <li key={g.id} className="flex flex-wrap justify-between gap-2">
-                  <span>{g.achieved_at ? "✅" : "▫️"} {g.title}</span>
+                <li key={g.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="inline-flex items-center gap-2">
+                    <span className={`inline-block h-2 w-2 rounded-full ${g.achieved_at ? "bg-[var(--pos)]" : "bg-[var(--soft)]"}`} aria-hidden />
+                    {g.title}
+                  </span>
                   <span className="text-mute">{brl(Number(g.current))} / {brl(Number(g.target))}</span>
                 </li>
               ))}

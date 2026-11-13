@@ -5,6 +5,7 @@ import { getCached, invalidateCache } from "@/lib/cache";
 import { CACHE_KEYS, fetchContactDetail, type ContactDetail } from "@/lib/data";
 import { brl, dueInfo, KINDS, nameOf, phoneFmt, prettyNote, STAGES, waLink, type Contact, type Member, type Stage } from "@/lib/ops";
 import { useMe } from "../AuthGate";
+import { IconInstagram, IconMessage, IconPhone } from "../Icons";
 import { FormError } from "../opsui";
 import { Modal } from "../ui";
 
@@ -84,18 +85,23 @@ export function ContactSheet({ id, initialContact, team, askLossInitially = fals
           <div className="grid grid-cols-3 gap-2">
             {c.phone ? (
               <a className="btn font-medium text-accent" href={waLink(c.phone)} target="_blank" rel="noopener noreferrer">
-                💬 WhatsApp
+                <IconMessage size={16} />
+                WhatsApp
               </a>
             ) : (
               <span className="btn opacity-40" aria-disabled>WhatsApp</span>
             )}
             {c.phone ? (
-              <a className="btn" href={`tel:+${c.phone}`}>📞 Ligar</a>
+              <a className="btn" href={`tel:+${c.phone}`}>
+                <IconPhone size={15} />
+                Ligar
+              </a>
             ) : (
               <span className="btn opacity-40" aria-disabled>Ligar</span>
             )}
             {c.instagram ? (
               <a className="btn" href={`https://instagram.com/${c.instagram}`} target="_blank" rel="noopener noreferrer">
+                <IconInstagram size={15} />
                 Instagram
               </a>
             ) : (
@@ -104,7 +110,20 @@ export function ContactSheet({ id, initialContact, team, askLossInitially = fals
           </div>
 
           <div>
-            <span className="label">Estágio</span>
+            <span className="label">Pipeline</span>
+            <div className="mb-2.5 flex gap-1" aria-hidden>
+              {STAGES.filter((s) => s.id !== "perdido").map((s, idx, arr) => {
+                const curIdx = arr.findIndex((x) => x.id === c.stage);
+                const filled = c.stage !== "perdido" && curIdx >= idx;
+                return (
+                  <div
+                    key={s.id}
+                    className="h-1.5 flex-1 rounded-full transition-colors"
+                    style={{ background: filled ? s.color : "var(--surface-2)" }}
+                  />
+                );
+              })}
+            </div>
             <div className="flex flex-wrap gap-2">
               {STAGES.map((s) => (
                 <button
