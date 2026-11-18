@@ -5,6 +5,8 @@ import { getCached, subscribeCache } from "@/lib/cache";
 import { CACHE_KEYS } from "@/lib/data";
 import { todayISO, type Contact, type Task } from "@/lib/ops";
 import { useMe } from "./AuthGate";
+import CatalogTab from "./catalog/CatalogTab";
+import HomeTab from "./home/HomeTab";
 import ClientsTab from "./ClientsTab";
 import CrmTab from "./CrmTab";
 import KrivoTab from "./KrivoTab";
@@ -14,6 +16,10 @@ import TeamTab from "./TeamTab";
 import { ThemeToggle } from "./ThemeToggle";
 
 const BASE_GROUPS = [
+  {
+    title: "Início",
+    items: [{ id: "home", label: "Home", sub: "Resumo do dia e assistente de IA" }],
+  },
   {
     title: "Operação",
     items: [
@@ -32,10 +38,13 @@ const BASE_GROUPS = [
 
 const ADMIN_GROUP = {
   title: "Gestão",
-  items: [{ id: "equipe", label: "Equipe", sub: "Sócios, acessos e redefinição de senha" }],
+  items: [
+    { id: "catalogo", label: "Catálogo", sub: "Produtos, escopos e preços da KRIVO" },
+    { id: "equipe", label: "Equipe", sub: "Sócios, acessos e redefinição de senha" },
+  ],
 } as const;
 
-type TabId = "tarefas" | "crm" | "krivo" | "clientes" | "equipe";
+type TabId = "home" | "tarefas" | "crm" | "krivo" | "clientes" | "catalogo" | "equipe";
 
 function TabIcon({ id }: { id: TabId }) {
   const props = {
@@ -50,6 +59,8 @@ function TabIcon({ id }: { id: TabId }) {
     "aria-hidden": true as const,
   };
   switch (id) {
+    case "home":
+      return <svg {...props}><path d="M3 11.5 12 4l9 7.5" /><path d="M5 10v10h14V10" /><path d="M10 20v-6h4v6" /></svg>;
     case "tarefas":
       return <svg {...props}><rect x="3" y="4" width="18" height="16" rx="3" /><path d="m8 12 2.5 2.5L16 9" /></svg>;
     case "crm":
@@ -58,6 +69,8 @@ function TabIcon({ id }: { id: TabId }) {
       return <svg {...props}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></svg>;
     case "clientes":
       return <svg {...props}><path d="M3 3v18h18" /><path d="M8 16v-5M13 16V7M18 16v-8" /></svg>;
+    case "catalogo":
+      return <svg {...props}><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" /></svg>;
     case "equipe":
       return <svg {...props}><path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z" /><path d="M4 21v-1a6 6 0 0 1 12 0v1" /><path d="M19 8v6M22 11h-6" /></svg>;
   }
@@ -94,8 +107,8 @@ export default function App() {
   const isAdmin = me.role === "admin";
   const groups = isAdmin ? [...BASE_GROUPS, ADMIN_GROUP] : [...BASE_GROUPS];
   const tabs = groups.flatMap((g) => [...g.items]);
-  const [tab, setTab] = useState<TabId>("tarefas");
-  const [visited, setVisited] = useState<Record<TabId, boolean>>({ tarefas: true, crm: false, krivo: false, clientes: false, equipe: false });
+  const [tab, setTab] = useState<TabId>("home");
+  const [visited, setVisited] = useState<Record<TabId, boolean>>({ home: true, tarefas: false, crm: false, krivo: false, clientes: false, catalogo: false, equipe: false });
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const counts = useNavCounts();
 
@@ -237,10 +250,14 @@ export default function App() {
         </div>
 
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-4 pb-24 lg:px-6 lg:py-4 lg:pb-8">
+          <div role="tabpanel" id="panel-home" aria-labelledby="tab-home" hidden={tab !== "home"}>{visited.home && <HomeTab go={select} />}</div>
           <div role="tabpanel" id="panel-tarefas" aria-labelledby="tab-tarefas" hidden={tab !== "tarefas"}>{visited.tarefas && <TasksTab />}</div>
           <div role="tabpanel" id="panel-crm" aria-labelledby="tab-crm" hidden={tab !== "crm"}>{visited.crm && <CrmTab />}</div>
           <div role="tabpanel" id="panel-krivo" aria-labelledby="tab-krivo" hidden={tab !== "krivo"}>{visited.krivo && <KrivoTab />}</div>
           <div role="tabpanel" id="panel-clientes" aria-labelledby="tab-clientes" hidden={tab !== "clientes"}>{visited.clientes && <ClientsTab />}</div>
+          {isAdmin && (
+            <div role="tabpanel" id="panel-catalogo" aria-labelledby="tab-catalogo" hidden={tab !== "catalogo"}>{visited.catalogo && <CatalogTab />}</div>
+          )}
           {isAdmin && (
             <div role="tabpanel" id="panel-equipe" aria-labelledby="tab-equipe" hidden={tab !== "equipe"}>{visited.equipe && <TeamTab />}</div>
           )}
@@ -251,7 +268,7 @@ export default function App() {
       <div
         role="tablist"
         aria-label="Seções"
-        className={`fixed inset-x-0 bottom-0 z-40 grid ${isAdmin ? "grid-cols-5" : "grid-cols-4"} border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden`}
+        className={`fixed inset-x-0 bottom-0 z-40 grid ${isAdmin ? "grid-cols-7" : "grid-cols-5"} border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden`}
       >
         {tabs.map((t, i) => {
           const active = tab === t.id;
@@ -267,7 +284,7 @@ export default function App() {
               tabIndex={active ? 0 : -1}
               onClick={() => select(t.id)}
               onKeyDown={(e) => onKey(e, i)}
-              className={`relative flex min-h-15 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-medium transition ${
+              className={`relative flex min-h-15 flex-col items-center justify-center gap-0.5 px-0.5 py-1.5 text-[10px] font-medium transition ${
                 active ? "text-accent" : "text-mute hover:text-ink"
               }`}
             >

@@ -622,7 +622,68 @@ async function interactionAdd(i: any, u: Member) {
   return { interaction: data };
 }
 
+// ---------- ações: catálogo de produtos (somente administradores: contém preços) ----------
+const CATALOG_KINDS = ["product", "rule"];
+function cleanDetails(v: unknown) {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v) || v.length > 12) throw bad("Use no máximo 12 tópicos de detalhe.");
+  return v.map((d) => {
+    if (!d || typeof d !== "object") throw bad("Tópico de detalhe inválido.");
+    return { label: str((d as any).label, "O título do tópico", 1, 60), text: str((d as any).text, "O texto do tópico", 1, 800) };
+  });
+}
+function cleanBool(v: unknown, label: string) {
+  if (typeof v !== "boolean") throw bad(`${label} inválido.`);
+  return v;
+}
+async function catalogList() {
+  const { data, error } = await sb.from("catalog_items").select("*").order("kind", { ascending: true }).order("position", { ascending: true }).order("created_at", { ascending: true }).limit(200);
+  if (error) throw dbErr("Erro ao ler o catálogo.");
+  return { items: data };
+}
+async function catalogFields(i: any, partial: boolean) {
+  const p: Record<string, unknown> = {};
+  const has = (k: string) => !partial || i[k] !== undefined;
+  if (has("name")) p.name = str(i.name, "O nome", 2, 80);
+  if (has("code")) p.code = optStr(i.code, "O código", 8);
+  if (has("tagline")) p.tagline = optStr(i.tagline, "A descrição curta", 120);
+  if (has("billing")) p.billing = optStr(i.billing, "A cobrança", 40);
+  if (has("summary")) p.summary = optStr(i.summary, "O resumo", 1000);
+  if (has("price_upfront")) p.price_upfront = cleanMoney(i.price_upfront);
+  if (has("upfront_label")) p.upfront_label = optStr(i.upfront_label, "O nome da cobrança inicial", 30);
+  if (has("price_monthly")) p.price_monthly = cleanMoney(i.price_monthly);
+  if (has("has_monthly")) p.has_monthly = cleanBool(i.has_monthly, "Mensalidade");
+  if (has("details")) p.details = cleanDetails(i.details);
+  return p;
+}
+async function catalogCreate(i: any, u: Member) {
+  const kind = oneOf(i.kind ?? "product", CATALOG_KINDS, "Tipo");
+  const p = await catalogFields(i, false);
+  const { data: last } = await sb.from("catalog_items").select("position").eq("kind", kind).order("position", { ascending: false }).limit(1);
+  const position = last && last.length ? Number(last[0].position) + 1 : 0;
+  const { data, error } = await sb.from("catalog_items").insert({ ...p, kind, position, created_by: u.id, updated_by: u.id }).select().single();
+  if (error) throw dbErr("Erro ao salvar o item do catálogo.");
+  return { item: data };
+}
+async function catalogUpdate(i: any, u: Member) {
+  const id = uuid(i.id, "ID do item");
+  const p = await catalogFields(i, true);
+  const { data, error } = await sb.from("catalog_items").update({ ...p, updated_by: u.id, updated_at: new Date().toISOString() }).eq("id", id).select().maybeSingle();
+  if (error) throw dbErr("Erro ao atualizar o item do catálogo.");
+  if (!data) throw new AppError(404, "nao_encontrado", "Item do catálogo não encontrado.");
+  return { item: data };
+}
+async function catalogDelete(i: any) {
+  const id = uuid(i.id, "ID do item");
+  const { error } = await sb.from("catalog_items").delete().eq("id", id);
+  if (error) throw dbErr("Erro ao remover o item do catálogo.");
+  return { ok: true };
+}
+
 const WRITE = [
+  "catalog_create",
+  "catalog_update",
+  "catalog_delete",
   "task_create",
   "task_update",
   "task_delete",
@@ -635,7 +696,7 @@ const WRITE = [
   "team_remove",
   "password_reset_complete",
 ];
-const READ = ["me", "team", "team_list", "tasks_list", "contacts_list", "contact_get", "bootstrap"];
+const READ = ["me", "team", "team_list", "tasks_list", "contacts_list", "contact_get", "bootstrap", "catalog_list"];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -675,6 +736,10 @@ Deno.serve(async (req) => {
       case "contact_update": return json(await contactUpdate(input, user));
       case "contact_delete": needAdmin(user); return json(await contactDelete(input));
       case "interaction_add": return json(await interactionAdd(input, user), 201);
+      case "catalog_list": needAdmin(user); return json(await catalogList());
+      case "catalog_create": needAdmin(user); return json(await catalogCreate(input, user), 201);
+      case "catalog_update": needAdmin(user); return json(await catalogUpdate(input, user));
+      case "catalog_delete": needAdmin(user); return json(await catalogDelete(input));
     }
     throw new AppError(400, "acao_invalida", "Ação inválida.");
   } catch (e) {

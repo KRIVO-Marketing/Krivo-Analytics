@@ -2,3 +2,8 @@ node_modules
 .next
 next-env.d.ts
 *.tsbuildinfo
+
+# segredos locais (nunca commitar)
+.env
+.env.*
+!.env.example

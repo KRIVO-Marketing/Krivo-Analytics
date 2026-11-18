@@ -2,7 +2,7 @@
 import { ApiError, apiRead, opsCall } from "./api";
 import type { Me } from "./auth";
 import { cachedFetch, getCached, setCached } from "./cache";
-import type { Contact, Interaction, Member, Task } from "./ops";
+import type { CatalogItem, Contact, Interaction, Member, Task } from "./ops";
 import type { Goal, Info, Metrics, Property, RealtimeMetrics } from "./types";
 
 const METRICS_TTL_MS = 5 * 60_000;
@@ -18,6 +18,7 @@ export const CACHE_KEYS = {
   team: "team",
   tasks: "tasks",
   contacts: "contacts",
+  catalog: "catalog",
   properties: "properties",
   info: "info",
   goals: "goals",
@@ -46,7 +47,14 @@ export const fetchContacts = (force = false) =>
     { force },
   );
 
-export const fetchProperties = (force = false) =>
+export const fetchCatalog = (force = false) =>
+  cachedFetch(
+    CACHE_KEYS.catalog,
+    () => opsCall<{ items: CatalogItem[] }>({ action: "catalog_list" }).then((r) => r.items),
+    { force },
+  );
+
+export const fetchProperties =(force = false) =>
   cachedFetch(
     CACHE_KEYS.properties,
     () => apiRead<{ properties: Property[] }>({ action: "list" }).then((r) => r.properties),
