@@ -48,6 +48,25 @@ export type Member = {
   created_at?: string;
 };
 
+// Catálogo de produtos (somente administradores). Preço nulo = "a definir".
+export type CatalogDetail = { label: string; text: string };
+export type CatalogItem = {
+  id: string; kind: "product" | "rule"; position: number; code: string | null; name: string;
+  tagline: string | null; billing: string | null; summary: string | null;
+  price_upfront: number | string | null; upfront_label: string | null;
+  price_monthly: number | string | null; has_monthly: boolean;
+  details: CatalogDetail[]; updated_at: string;
+};
+// "R$ 1.500 + R$ 800/mês", "R$ 2.000 (Setup)", ou "Preço a definir".
+export function priceLine(it: Pick<CatalogItem, "price_upfront" | "upfront_label" | "price_monthly" | "has_monthly">) {
+  const parts: string[] = [];
+  if (it.upfront_label) parts.push(it.price_upfront != null ? `${brl(it.price_upfront)} ${it.upfront_label.toLowerCase()}` : `${it.upfront_label}: a definir`);
+  if (it.has_monthly) parts.push(it.price_monthly != null ? `${brl(it.price_monthly)}/mês` : "mensal: a definir");
+  return parts.join(" + ");
+}
+export const hasAnyPrice = (it: CatalogItem) =>
+  (!!it.upfront_label && it.price_upfront != null) || (it.has_monthly && it.price_monthly != null);
+
 export const stageOf = (id: string) => STAGES.find((s) => s.id === id);
 export const nameOf = (m?: Member | null) => (m ? (m.name?.trim() || m.email.split("@")[0]) : "");
 export const initial = (m?: Member | null) => (m ? nameOf(m).charAt(0).toUpperCase() || "?" : "?");

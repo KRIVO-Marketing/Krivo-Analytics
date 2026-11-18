@@ -4,6 +4,7 @@ import { getAuth } from "./auth";
 
 export const BASE_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ga4-api";
 export const OPS_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ops-api";
+export const AI_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ai-chat";
 
 export class ApiError extends Error {
   constructor(message: string, public code: string, public status: number) {
@@ -60,3 +61,6 @@ export const apiWrite = <T,>(body: Record<string, unknown>) => call<T>(body);
 
 // Tarefas e CRM (função ops-api)
 export const opsCall = <T,>(body: Record<string, unknown>, signal?: AbortSignal) => call<T>(body, signal, OPS_URL);
+
+// Chat de IA (função ai-chat). O navegador envia só as mensagens; o contexto é montado no servidor.
+export const aiCall = <T,>(body: Record<string, unknown>, signal?: AbortSignal) => call<T>(body, signal, AI_URL);
