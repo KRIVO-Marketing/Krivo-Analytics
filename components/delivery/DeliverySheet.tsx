@@ -118,7 +118,7 @@ export function DeliverySheet({ id, team, onClose, onChanged, onDeleted }: Props
   };
 
   const msgVars = () => ({
-    nome: (contact?.name ?? "").split(" ")[0] || contact?.name,
+    nome: (contact?.name ?? "").split(" ")[0] || contact?.company || undefined,
     sócio: owner ? nameOf(owner).split(" ")[0] : (me.name || me.email.split("@")[0]).split(" ")[0],
     socio: owner ? nameOf(owner).split(" ")[0] : (me.name || me.email.split("@")[0]).split(" ")[0],
     produto: d?.product_codes.map((c) => productByCode(c)?.name).filter(Boolean).join(", "),
@@ -127,7 +127,7 @@ export function DeliverySheet({ id, team, onClose, onChanged, onDeleted }: Props
     const m = messages.find((x) => x.key === key);
     if (!m) return setErr("Mensagem não encontrada. Veja em Modelos > Mensagens prontas.");
     const ok = await copyText(fillMessage(m.body, msgVars()));
-    setToast(ok ? `Mensagem "${m.title}" copiada. Complete os campos entre {{ }} antes de enviar.` : "Não foi possível copiar.");
+    setToast(ok ? `Mensagem "${m.title}" copiada. Complete os campos entre [ ] antes de enviar.` : "Não foi possível copiar.");
   };
 
   const toTask = (it: DeliveryItem) =>

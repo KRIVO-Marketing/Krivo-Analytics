@@ -93,7 +93,7 @@ Itens marcados **[tag]** aplicam-se só ao produto indicado. Itens sem tag valem
 
 **Fase 1 · Fechamento e contrato** (dias 0 a 2)
 1. Confirmar com o cliente os produtos, os valores (setup e mensal), a forma de pagamento e a fidelidade de 3 meses. Registrar no card. (Sócio responsável)
-2. Pedir os dados do contrato: nome ou razão social, CPF/CNPJ, endereço com CEP, e-mail e WhatsApp, por canal combinado ou pela ficha do Guia de Acessos. [Modelo: Guia de acessos] (Sócio responsável)
+2. Pedir os dados do contrato: nome ou razão social, CPF/CNPJ, endereço com CEP, e-mail e WhatsApp, e o representante se for empresa. [Mensagem 6 ou 7] [Modelo: Guia de acessos] (Sócio responsável)
 3. Preencher o formulário do contrato na plataforma (partes, produtos, valores, datas) e gerar o Word. [Botão: Preencher contrato] [Modelo: Contrato modelo (Word)] (Sócio responsável)
 4. Revisão cruzada: um segundo sócio confere valores, datas e escopo antes de enviar. (Outro sócio)
 5. Confirmar nome e e-mail do cliente em voz alta ou por mensagem e enviar para assinatura eletrônica. (Sócio responsável)
@@ -163,6 +163,8 @@ Use `{{nome}}` e `{{sócio}}` como variáveis simples substituídas no botão Co
 3. **Acessos:** "{{nome}}, para começar o seu {{produto}}, preciso de alguns acessos. O guia que enviei explica cada passo e é tudo por convite, sem você passar senha. Se preferir, a gente faz junto numa chamada rápida. Consegue liberar até {{data}}?"
 4. **Plano de 7 dias:** "{{nome}}, obrigado pela conversa. Aqui vai o plano dos próximos 7 dias: {{itens}}. O que depende de você está marcado. Qualquer ajuste, me avise."
 5. **Cobrar pendência de acesso:** "{{nome}}, passando para ver como estão os acessos. Faltam: {{lista}}. Se quiser, a gente faz junto agora, leva poucos minutos."
+6. **Coleta de dados do contrato (pessoa física):** "Olá, {{nome}}! Para preparar o seu contrato, precisamos de alguns dados. Pode nos enviar, por favor?\n\n1. Nome completo\n2. CPF\n3. Endereço completo, com CEP\n4. E-mail\n5. WhatsApp\n6. Quem aprova o conteúdo, caso não seja você\n\nAssim que recebermos, enviamos o contrato para assinatura eletrônica."
+7. **Coleta de dados do contrato (pessoa jurídica):** "Olá, {{nome}}! Para preparar o contrato, precisamos dos dados da empresa. Pode nos enviar, por favor?\n\n1. Razão social e nome fantasia\n2. CNPJ\n3. Endereço completo da empresa, com CEP\n4. E-mail e WhatsApp para contato\n5. Representante que assina o contrato: nome completo, CPF e cargo\n6. Quem aprova o conteúdo, caso não seja o representante\n\nAssim que recebermos, enviamos o contrato para assinatura eletrônica."
 
 ## 5. Modelos (arquivos para download na plataforma)
 

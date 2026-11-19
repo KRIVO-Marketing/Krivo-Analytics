@@ -1,7 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
 import { opsCall } from "@/lib/api";
-import { PRODUCTS, productByCode, type DeliveryDoc, type DeliveryMessage, type DeliveryTemplate } from "@/lib/delivery";
+import { messageKeysOf, PRODUCTS, productByCode, type DeliveryDoc, type DeliveryMessage, type DeliveryTemplate } from "@/lib/delivery";
 import { FormError } from "../opsui";
 import { Modal } from "../ui";
 
@@ -84,7 +84,7 @@ function TemplateForm({ t, phases, docs, messages, onClose, onSaved }: {
   const [product, setProduct] = useState(t?.product_code ?? "");
   const [offset, setOffset] = useState(t?.due_offset_days != null ? String(t.due_offset_days) : "");
   const [doc, setDoc] = useState(t?.doc_slug ?? "");
-  const [msg, setMsg] = useState(t?.message_key ?? "");
+  const [msgs, setMsgs] = useState<string[]>(() => (t ? messageKeysOf(t) : []));
   const [recurring, setRecurring] = useState(t?.recurring ?? false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -104,7 +104,7 @@ function TemplateForm({ t, phases, docs, messages, onClose, onSaved }: {
       const payload = {
         phase: Number(phase), phase_title: phaseTitle, title, description: desc, owner_hint: owner,
         product_code: product || null, due_offset_days: offset === "" ? null : Number(offset),
-        doc_slug: doc || null, message_key: msg || null, recurring,
+        doc_slug: doc || null, message_keys: msgs, recurring,
       };
       const r = t
         ? await opsCall<{ template: DeliveryTemplate }>({ action: "delivery_template_update", id: t.id, ...payload })
@@ -143,22 +143,26 @@ function TemplateForm({ t, phases, docs, messages, onClose, onSaved }: {
           <div><label className="label" htmlFor="tp-owner">Responsável sugerido</label><input id="tp-owner" className="field" maxLength={40} placeholder="Sócio responsável" value={owner} onChange={(e) => setOwner(e.target.value)} /></div>
           <div><label className="label" htmlFor="tp-off">Prazo (dias após o início)</label><input id="tp-off" className="field" type="number" min={0} max={365} value={offset} onChange={(e) => setOffset(e.target.value)} /></div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label" htmlFor="tp-doc">Modelo para baixar</label>
-            <select id="tp-doc" className="field" value={doc} onChange={(e) => setDoc(e.target.value)}>
-              <option value="">Nenhum</option>
-              {docs.map((d) => <option key={d.slug} value={d.slug}>{d.title}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="label" htmlFor="tp-msg">Mensagem pronta</label>
-            <select id="tp-msg" className="field" value={msg} onChange={(e) => setMsg(e.target.value)}>
-              <option value="">Nenhuma</option>
-              {messages.map((m) => <option key={m.key} value={m.key}>{m.title}</option>)}
-            </select>
-          </div>
+        <div>
+          <label className="label" htmlFor="tp-doc">Modelo para baixar</label>
+          <select id="tp-doc" className="field" value={doc} onChange={(e) => setDoc(e.target.value)}>
+            <option value="">Nenhum</option>
+            {docs.map((d) => <option key={d.slug} value={d.slug}>{d.title}</option>)}
+          </select>
         </div>
+        <fieldset>
+          <legend className="label">Mensagens prontas</legend>
+          <div className="grid gap-1 sm:grid-cols-2">
+            {messages.map((m) => (
+              <label key={m.key} className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+                <input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked={msgs.includes(m.key)}
+                  onChange={(e) => setMsgs((cur) => (e.target.checked ? [...cur, m.key] : cur.filter((k) => k !== m.key)))} />
+                {m.title}
+              </label>
+            ))}
+          </div>
+          <p className="hint">Com mais de uma, o item mostra um botão de copiar para cada mensagem.</p>
+        </fieldset>
         <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
           <input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} />
           Regra de rotina (aparece como regra, sem checkbox)

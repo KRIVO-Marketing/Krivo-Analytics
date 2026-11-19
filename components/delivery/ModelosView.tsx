@@ -4,7 +4,7 @@ import { opsCall } from "@/lib/api";
 import { setCached } from "@/lib/cache";
 import { CACHE_KEYS, fetchDeliveryDocs, fetchDeliveryMessages, fetchDeliveryTemplates } from "@/lib/data";
 import {
-  calendarTitle, copyText, downloadUrl, fileSize, fmtDate, type DeliveryDoc, type DeliveryMessage, type DeliveryTemplate,
+  calendarTitle, copyText, downloadUrl, fileSize, fillMessage, fmtDate, type DeliveryDoc, type DeliveryMessage, type DeliveryTemplate,
 } from "@/lib/delivery";
 import { useMe } from "../AuthGate";
 import { FormError } from "../opsui";
@@ -67,7 +67,7 @@ export function ModelosView() {
 
       <section aria-labelledby="h-msgs">
         <h2 id="h-msgs" className="mb-1 text-base font-semibold text-ink">Mensagens prontas</h2>
-        <p className="mb-2 text-xs text-mute">{"{{nome}}"} e {"{{sócio}}"} são trocados automaticamente quando você copia de dentro de uma entrega.</p>
+        <p className="mb-2 text-xs text-mute">{"{{nome}}"}, {"{{sócio}}"} e {"{{produto}}"} são trocados quando você copia de dentro de uma entrega. Aqui, as variáveis saem como [nome] para você completar.</p>
         <ul className="space-y-3">
           {messages.map((m) => (
             <MessageCard key={m.key} m={m} isAdmin={isAdmin} onCopied={() => setToast(`"${m.title}" copiada.`)} onChanged={(nm) => {
@@ -236,7 +236,7 @@ function MessageCard({ m, isAdmin, onCopied, onChanged }: { m: DeliveryMessage; 
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h3 className="font-semibold text-ink">{m.title}</h3>
         <div className="flex gap-2">
-          <button type="button" className="btn min-h-9 px-3 text-xs" onClick={async () => { if (await copyText(m.body)) onCopied(); }}>Copiar</button>
+          <button type="button" className="btn min-h-9 px-3 text-xs" onClick={async () => { if (await copyText(fillMessage(m.body, {}))) onCopied(); }}>Copiar</button>
           {isAdmin && <button type="button" className="btn min-h-9 px-3 text-xs" onClick={() => setEdit(true)}>Editar</button>}
         </div>
       </div>
@@ -261,7 +261,7 @@ function MessageCard({ m, isAdmin, onCopied, onChanged }: { m: DeliveryMessage; 
             <div>
               <label className="label" htmlFor={`mb-${m.key}`}>Texto</label>
               <textarea id={`mb-${m.key}`} className="field" rows={6} maxLength={2000} value={body} onChange={(e) => setBody(e.target.value)} required />
-              <p className="hint">Variáveis: {"{{nome}}"}, {"{{sócio}}"}, {"{{produto}}"}. As outras ({"{{data}}"}, {"{{itens}}"}, {"{{lista}}"}) a equipe completa à mão.</p>
+              <p className="hint">Variáveis: {"{{nome}}"}, {"{{sócio}}"}, {"{{produto}}"}. As outras ({"{{data}}"}, {"{{itens}}"}, {"{{lista}}"}) saem como [data], [itens], [lista] para a equipe completar à mão.</p>
             </div>
             <FormError message={err} />
             <div className="flex gap-2"><button type="button" className="btn flex-1" onClick={() => setEdit(false)}>Cancelar</button><button type="submit" className="btn btn-primary flex-1" disabled={busy}>Salvar</button></div>

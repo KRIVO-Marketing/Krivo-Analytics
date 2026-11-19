@@ -43,7 +43,7 @@ export type DeliveryItem = {
   id: string; delivery_id: string; template_id: string | null; phase: number; phase_title: string; position: number;
   product_code: string | null; title: string; description: string | null; owner_hint: string | null; recurring: boolean;
   done: boolean; done_at: string | null; done_by: string | null; assignee_id: string | null; due_date: string | null;
-  note: string | null; task_id: string | null; doc_slug: string | null; message_key: string | null; action: string | null;
+  note: string | null; task_id: string | null; doc_slug: string | null; message_key?: string | null; message_keys?: string[] | null; action: string | null;
 };
 export type DeliveryNote = { id: string; delivery_id: string; body: string; created_by: string | null; created_at: string };
 export type DeliveryContract = { id: string; file_name: string; generated_by: string | null; generated_at: string; size_bytes: number | null };
@@ -66,8 +66,17 @@ export type DeliveryMessage = { key: string; title: string; body: string; positi
 export type DeliveryTemplate = {
   id: string; phase: number; phase_title: string; position: number; product_code: string | null; title: string;
   description: string | null; owner_hint: string | null; due_offset_days: number | null; doc_slug: string | null;
-  message_key: string | null; action: string | null; recurring: boolean;
+  message_key?: string | null; message_keys?: string[] | null; action: string | null; recurring: boolean;
 };
+
+// mensagens prontas de um item (lista nova; a chave única antiga vale enquanto a lista estiver vazia)
+export const messageKeysOf = (x: { message_key?: string | null; message_keys?: string[] | null }) =>
+  x.message_keys?.length ? x.message_keys : x.message_key ? [x.message_key] : [];
+// "Coleta de dados do contrato (pessoa física)" -> "Pessoa física"
+export function messageShortLabel(title: string) {
+  const m = /\(([^)]+)\)\s*$/.exec(title);
+  return m ? m[1].charAt(0).toUpperCase() + m[1].slice(1) : title;
+}
 
 export type FieldSpec = { group: string; key: string; label: string; type: string; default: unknown; required: boolean; help: string };
 export type ContractFieldsResponse = { fields: FieldSpec[]; computed: string[]; product_codes: Record<string, string> };
@@ -99,11 +108,11 @@ export function calendarTitle(client: string, date: Date = new Date(), kind = "A
   return `[KRIVO][${client}][${dd}.${mm}.${yy}] ${kind}`;
 }
 
-// {{nome}}, {{sócio}} e demais: troca as que tiverem valor e mantém as outras para preencher à mão
+// {{nome}}, {{sócio}} e demais: troca as que tiverem valor; sem valor, deixa um marcador visível [nome] para preencher à mão
 export function fillMessage(body: string, vars: Record<string, string | undefined>) {
-  return body.replace(/\{\{\s*([^}\s]+)\s*\}\}/g, (all, k: string) => {
+  return body.replace(/\{\{\s*([^}\s]+)\s*\}\}/g, (_all, k: string) => {
     const v = vars[k] ?? vars[k.normalize("NFD").replace(/[̀-ͯ]/g, "")];
-    return v ? v : all;
+    return v && v.trim() ? v.trim() : `[${k}]`;
   });
 }
 

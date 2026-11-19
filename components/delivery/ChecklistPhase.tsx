@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useState } from "react";
-import { fmtDateTime, isOverdue, productByCode, type DeliveryItem } from "@/lib/delivery";
+import { fmtDateTime, isOverdue, messageKeysOf, messageShortLabel, productByCode, type DeliveryItem } from "@/lib/delivery";
 import { dueInfo, nameOf, type Member } from "@/lib/ops";
 
 type Handlers = {
@@ -80,6 +80,7 @@ function ItemRow({ it, team, docTitle, messageTitle, onUpdate, onDownload, onCop
   const assignee = it.assignee_id ? team.find((m) => m.id === it.assignee_id) : undefined;
   const prod = productByCode(it.product_code);
   const cbId = `chk-${it.id}`;
+  const messageKeys = messageKeysOf(it);
 
   return (
     <li className={`px-4 py-3 ${it.done ? "bg-[var(--surface-2)]/40" : ""}`}>
@@ -119,10 +120,20 @@ function ItemRow({ it, team, docTitle, messageTitle, onUpdate, onDownload, onCop
                 Baixar modelo
               </button>
             )}
-            {it.message_key && (
-              <button type="button" className="btn min-h-9 px-3 text-xs" onClick={() => onCopy(it.message_key!)} title={messageTitle(it.message_key)}>
+            {messageKeys.length === 1 && (
+              <button type="button" className="btn min-h-9 px-3 text-xs" onClick={() => onCopy(messageKeys[0])} title={messageTitle(messageKeys[0])}>
                 Copiar mensagem
               </button>
+            )}
+            {messageKeys.length > 1 && (
+              <span role="group" aria-label="Copiar mensagem" className="inline-flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-mute">Copiar mensagem:</span>
+                {messageKeys.map((k) => (
+                  <button key={k} type="button" className="btn min-h-9 px-3 text-xs" onClick={() => onCopy(k)} title={messageTitle(k)}>
+                    {messageShortLabel(messageTitle(k) ?? k)}
+                  </button>
+                ))}
+              </span>
             )}
             {it.task_id ? (
               <span className="inline-flex min-h-9 items-center rounded-xl border border-line px-3 text-xs text-mute">Tarefa criada</span>

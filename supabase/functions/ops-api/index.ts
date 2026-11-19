@@ -707,6 +707,9 @@ const DOC_KINDS: Record<string, { mime: string; ext: string }> = {
 };
 const SIGNED_URL_SECONDS = 60;
 const nowIso = () => new Date().toISOString();
+// mensagens do item do modelo: lista nova, ou a chave única antiga enquanto a lista estiver vazia
+const templateKeys = (t: { message_keys?: string[] | null; message_key?: string | null }) =>
+  t.message_keys?.length ? t.message_keys : t.message_key ? [t.message_key] : [];
 const notFound = (m: string) => new AppError(404, "nao_encontrado", m);
 
 function cleanCodes(v: unknown) {
@@ -843,7 +846,7 @@ async function deliveryCreate(i: any, u: Member) {
     delivery_id: d.id, template_id: t.id, phase: t.phase, phase_title: t.phase_title, position: t.position,
     product_code: t.product_code, title: t.title, description: t.description, owner_hint: t.owner_hint,
     recurring: t.recurring, due_date: t.due_offset_days === null || t.recurring ? null : addDays(started_at, t.due_offset_days),
-    doc_slug: t.doc_slug, message_key: t.message_key, action: t.action,
+    doc_slug: t.doc_slug, message_keys: templateKeys(t), action: t.action,
   }));
   if (rows.length) {
     const { error: iErr } = await sb.from("delivery_items").insert(rows);
@@ -981,10 +984,14 @@ async function templateFields(i: any, partial: boolean) {
     if (s && !SLUG.test(s)) throw bad("Modelo inválido.");
     p.doc_slug = s;
   }
-  if (has("message_key")) {
-    const s = optStr(i.message_key, "A mensagem", 40);
-    if (s && !MSG_KEY.test(s)) throw bad("Mensagem inválida.");
-    p.message_key = s;
+  if (i.message_keys !== undefined || (!partial && i.message_key !== undefined)) {
+    // lista de mensagens do item (aceita message_key único por compatibilidade)
+    const raw = i.message_keys !== undefined ? i.message_keys : (i.message_key ? [i.message_key] : []);
+    if (!Array.isArray(raw) || raw.length > 6) throw bad("Escolha até 6 mensagens.");
+    const keys = [...new Set(raw.map((k) => (typeof k === "string" ? k.trim() : "")))].filter(Boolean);
+    if (keys.some((k) => !MSG_KEY.test(k))) throw bad("Mensagem inválida.");
+    p.message_keys = keys;
+    p.message_key = null;
   }
   if (has("action")) p.action = i.action === null || i.action === "" || i.action === undefined ? null : oneOf(i.action, ["contrato"], "Ação");
   if (has("recurring")) p.recurring = i.recurring === undefined ? false : cleanBool(i.recurring, "Recorrente");
