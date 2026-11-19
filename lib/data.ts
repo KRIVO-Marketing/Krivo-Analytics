@@ -3,6 +3,7 @@ import { ApiError, apiRead, opsCall } from "./api";
 import type { Me } from "./auth";
 import { cachedFetch, getCached, setCached } from "./cache";
 import type { CatalogItem, Contact, Interaction, Member, Task } from "./ops";
+import type { ContractFieldsResponse, DeliveryDetail, DeliveryDoc, DeliveryMessage, DeliverySummary, DeliveryTemplate } from "./delivery";
 import type { Goal, Info, Metrics, Property, RealtimeMetrics } from "./types";
 
 const METRICS_TTL_MS = 5 * 60_000;
@@ -24,7 +25,27 @@ export const CACHE_KEYS = {
   goals: "goals",
   metrics: (propertyId: string, days: number) => `metrics:${propertyId}:${days}`,
   contactDetail: (id: string) => `contact:${id}`,
+  deliveries: "deliveries",
+  deliveryDetail: (id: string) => `delivery:${id}`,
+  deliveryDocs: "delivery_docs",
+  deliveryMessages: "delivery_messages",
+  deliveryTemplates: "delivery_templates",
+  contractFields: "contract_fields",
 } as const;
+
+// ---------- Entrega ----------
+export const fetchDeliveries = (force = false) =>
+  cachedFetch(CACHE_KEYS.deliveries, () => opsCall<{ deliveries: DeliverySummary[] }>({ action: "deliveries_list" }).then((r) => r.deliveries), { force, ttlMs: 2 * 60_000 });
+export const fetchDeliveryDetail = (id: string, force = false) =>
+  cachedFetch(CACHE_KEYS.deliveryDetail(id), () => opsCall<DeliveryDetail>({ action: "delivery_get", id }), { force, ttlMs: 60_000 });
+export const fetchDeliveryDocs = (force = false) =>
+  cachedFetch(CACHE_KEYS.deliveryDocs, () => opsCall<{ docs: DeliveryDoc[] }>({ action: "docs_list" }).then((r) => r.docs), { force });
+export const fetchDeliveryMessages = (force = false) =>
+  cachedFetch(CACHE_KEYS.deliveryMessages, () => opsCall<{ messages: DeliveryMessage[] }>({ action: "messages_list" }).then((r) => r.messages), { force });
+export const fetchDeliveryTemplates = (force = false) =>
+  cachedFetch(CACHE_KEYS.deliveryTemplates, () => opsCall<{ templates: DeliveryTemplate[] }>({ action: "delivery_templates_list" }).then((r) => r.templates), { force });
+export const fetchContractFields = () =>
+  cachedFetch(CACHE_KEYS.contractFields, () => opsCall<ContractFieldsResponse>({ action: "contract_fields" }), { ttlMs: 60 * 60_000 });
 
 export const fetchTeam = (force = false) =>
   cachedFetch(

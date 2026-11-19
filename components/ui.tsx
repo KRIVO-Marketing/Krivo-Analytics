@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 
 export function ErrorBox({ message, onRetry, retryLabel = "Tentar de novo" }: { message: string; onRetry?: () => void; retryLabel?: string }) {
   return (
@@ -14,13 +15,16 @@ export function ErrorBox({ message, onRetry, retryLabel = "Tentar de novo" }: { 
   );
 }
 
-export function Modal({ title, onClose, children, z = 50 }: { title: string; onClose: () => void; children: React.ReactNode; z?: number }) {
+export function Modal({ title, onClose, children, z = 50, wide = false }: { title: string; onClose: () => void; children: React.ReactNode; z?: number; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     const el = ref.current;
     el?.querySelector<HTMLElement>("input,select,textarea,button,[tabindex]")?.focus();
     const onKey = (e: KeyboardEvent) => {
+      // com modais empilhados, só o de cima (último no DOM) responde
+      const dialogs = document.querySelectorAll('[role="dialog"]');
+      if (dialogs[dialogs.length - 1] !== el) return;
       if (e.key === "Escape") onClose();
       if (e.key === "Tab" && el) {
         const f = Array.from(el.querySelectorAll<HTMLElement>("input,select,textarea,button,a[href],[tabindex]:not([tabindex='-1'])"))
@@ -41,7 +45,7 @@ export function Modal({ title, onClose, children, z = 50 }: { title: string; onC
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  return (
+  const node = (
     <div
       className="fixed inset-0 flex items-end justify-center bg-[#0f1b33]/65 backdrop-blur-[2px] p-0 sm:items-center sm:p-4"
       style={{ zIndex: z }}
@@ -53,7 +57,7 @@ export function Modal({ title, onClose, children, z = 50 }: { title: string; onC
         aria-modal="true"
         aria-label={title}
         style={{ boxShadow: "var(--shadow-sheet)" }}
-        className="flex max-h-[92dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-3xl border border-line bg-page sm:rounded-2xl"
+        className={`flex max-h-[92dvh] w-full ${wide ? "max-w-3xl" : "max-w-xl"} flex-col overflow-hidden rounded-t-3xl border border-line bg-page sm:rounded-2xl`}
       >
         <div className="shrink-0 border-b border-line bg-page/95 px-4 pt-2.5 pb-3 backdrop-blur-sm sm:px-5 sm:pt-3.5">
           <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-[var(--soft)]/60 sm:hidden" aria-hidden />
@@ -77,4 +81,5 @@ export function Modal({ title, onClose, children, z = 50 }: { title: string; onC
       </div>
     </div>
   );
+  return typeof document === "undefined" ? node : createPortal(node, document.body);
 }

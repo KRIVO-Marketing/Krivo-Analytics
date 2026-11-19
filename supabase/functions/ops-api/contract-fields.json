@@ -1,0 +1,304 @@
+{
+  "template": "KRIVO_Contrato-template.docx",
+  "engine": "docxtemplater (delimiters { })",
+  "fields": [
+    {
+      "group": "Contratante",
+      "key": "nome_contratante",
+      "label": "Nome completo ou razão social",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "help": ""
+    },
+    {
+      "group": "Contratante",
+      "key": "tipo_pessoa",
+      "label": "Tipo de pessoa",
+      "type": "select:pessoa física|pessoa jurídica",
+      "default": "pessoa física",
+      "required": true,
+      "help": "Se for CNPJ, escolha pessoa jurídica e preencha o representante."
+    },
+    {
+      "group": "Contratante",
+      "key": "doc_tipo",
+      "label": "Documento",
+      "type": "select:CPF|CNPJ",
+      "default": "CPF",
+      "required": true,
+      "help": ""
+    },
+    {
+      "group": "Contratante",
+      "key": "doc_numero",
+      "label": "Número do CPF ou CNPJ",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "help": "Validar formato e dígitos."
+    },
+    {
+      "group": "Contratante",
+      "key": "endereco",
+      "label": "Endereço completo com CEP",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "help": ""
+    },
+    {
+      "group": "Contratante",
+      "key": "email",
+      "label": "E-mail",
+      "type": "email",
+      "default": "",
+      "required": true,
+      "help": ""
+    },
+    {
+      "group": "Contratante",
+      "key": "whatsapp",
+      "label": "WhatsApp",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "help": ""
+    },
+    {
+      "group": "Contratante",
+      "key": "representante",
+      "label": "Representante (nome, CPF e cargo)",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": "Só para pessoa jurídica. Vazio = a frase some do contrato."
+    },
+    {
+      "group": "Contratante",
+      "key": "solidaria",
+      "label": "Representante responde solidariamente pelo pagamento?",
+      "type": "bool",
+      "default": false,
+      "required": false,
+      "help": "Só faz sentido para pessoa jurídica."
+    },
+    {
+      "group": "Produtos",
+      "key": "produtos",
+      "label": "Produtos contratados",
+      "type": "multiselect:diagnostico|social|local|site|atende|metodologia",
+      "default": [],
+      "required": true,
+      "help": "Metodologia liga Diagnóstico, Local, Site, Social e Atende. O app calcula produtos_lista e os blocos do Anexo I."
+    },
+    {
+      "group": "Pagamento",
+      "key": "parcelas",
+      "label": "Parcelas e mensalidade",
+      "type": "rows:item|valor|vencimento|forma",
+      "default": [],
+      "required": true,
+      "help": "Ex.: Implantação | R$ 1.500,00 (mil e quinhentos reais) | 25/11/2026 | Pix. Valor por extenso é digitado ou gerado pelo app."
+    },
+    {
+      "group": "Pagamento",
+      "key": "outra_forma",
+      "label": "Outra forma de pagamento combinada (opcional)",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": "Ex.: ou boleto bancário."
+    },
+    {
+      "group": "Pagamento",
+      "key": "indice_reajuste",
+      "label": "Índice de reajuste anual",
+      "type": "text",
+      "default": "IPCA",
+      "required": true,
+      "help": ""
+    },
+    {
+      "group": "Vigência",
+      "key": "data_inicio",
+      "label": "Data de início",
+      "type": "date_ptbr",
+      "default": "",
+      "required": true,
+      "help": "Formato: 25 de novembro de 2026."
+    },
+    {
+      "group": "Vigência",
+      "key": "prazo_minimo",
+      "label": "Prazo mínimo em meses",
+      "type": "text",
+      "default": "3 (três)",
+      "required": true,
+      "help": "Fidelidade mínima de 3 meses."
+    },
+    {
+      "group": "Vigência",
+      "key": "aviso_previo",
+      "label": "Aviso prévio em dias",
+      "type": "text",
+      "default": "30 (trinta)",
+      "required": true,
+      "help": ""
+    },
+    {
+      "group": "Vigência",
+      "key": "regra_cancelamento",
+      "label": "Regra de cancelamento antes do prazo mínimo",
+      "type": "text",
+      "default": "as mensalidades restantes até o fim do prazo mínimo",
+      "required": true,
+      "help": "Decisão dos sócios (cláusula 14.2)."
+    },
+    {
+      "group": "Condições",
+      "key": "aprov_previa",
+      "label": "Cliente aprova cada peça antes de publicar?",
+      "type": "bool",
+      "default": true,
+      "required": true,
+      "help": "Desmarcado = aprovação prévia dispensada (cláusulas 7.1 e 7.2 mudam)."
+    },
+    {
+      "group": "Condições",
+      "key": "prazo_aprovacao",
+      "label": "Prazo de resposta às aprovações (dias úteis)",
+      "type": "text",
+      "default": "2 (dois)",
+      "required": true,
+      "help": ""
+    },
+    {
+      "group": "Condições",
+      "key": "parceria",
+      "label": "Há parceria ou contrapartida de divulgação?",
+      "type": "bool",
+      "default": false,
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Condições",
+      "key": "texto_parceria",
+      "label": "Texto da parceria (cláusula 10.4)",
+      "type": "textarea",
+      "default": "",
+      "required": false,
+      "help": "Só se parceria = sim."
+    },
+    {
+      "group": "Diagnóstico",
+      "key": "diag_prazo",
+      "label": "Prazo (dias úteis após receber os acessos)",
+      "type": "text",
+      "default": "5",
+      "required": false,
+      "help": "Só se contratado."
+    },
+    {
+      "group": "Social",
+      "key": "social_posts",
+      "label": "Posts de feed por mês",
+      "type": "text",
+      "default": "12",
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Social",
+      "key": "social_reels",
+      "label": "Reels por mês",
+      "type": "text",
+      "default": "4",
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Social",
+      "key": "social_captacao",
+      "label": "Captação presencial",
+      "type": "text",
+      "default": "não incluída",
+      "required": false,
+      "help": "Ex.: não incluída / incluída 1 vez por mês."
+    },
+    {
+      "group": "Social",
+      "key": "social_rodadas",
+      "label": "Rodadas de ajuste por peça",
+      "type": "text",
+      "default": "2",
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Site",
+      "key": "site_paginas",
+      "label": "Número de páginas",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Site",
+      "key": "site_textos",
+      "label": "Textos novos por mês",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Site",
+      "key": "site_rodadas",
+      "label": "Rodadas de revisão do projeto",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Atende",
+      "key": "atende_canal",
+      "label": "Canal conectado",
+      "type": "text",
+      "default": "WhatsApp",
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Atende",
+      "key": "atende_custos",
+      "label": "Custos de plataforma e mensagens (valor ou regra)",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": ""
+    },
+    {
+      "group": "Metodologia",
+      "key": "metodologia_fases",
+      "label": "Duração de cada fase",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": ""
+    }
+  ],
+  "computed": [
+    "produtos_lista",
+    "diagnostico",
+    "social",
+    "local",
+    "site",
+    "atende",
+    "metodologia"
+  ],
+  "notes": "Blocos {#chave}...{/chave} são condicionais ou loops. produtos_lista e as chaves de produto (diagnostico, social, local, site, atende, metodologia) são calculadas pelo app a partir de 'produtos'."
+}

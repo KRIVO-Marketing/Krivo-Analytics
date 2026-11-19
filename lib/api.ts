@@ -7,7 +7,7 @@ export const OPS_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/op
 export const AI_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ai-chat";
 
 export class ApiError extends Error {
-  constructor(message: string, public code: string, public status: number) {
+  constructor(message: string, public code: string, public status: number, public details: string[] = []) {
     super(message);
   }
 }
@@ -51,7 +51,8 @@ async function call<T>(body: Record<string, unknown>, signal?: AbortSignal, url:
     const code: string = json?.error?.code ?? "interno";
     if (res.status === 401) handlers?.onExpired();
     else if (res.status === 403 && code === "sem_permissao") handlers?.onForbidden();
-    throw new ApiError(json?.error?.message ?? "Algo deu errado. Tente de novo.", code, res.status);
+    const details = Array.isArray(json?.error?.details) ? (json.error.details as unknown[]).filter((d): d is string => typeof d === "string") : [];
+    throw new ApiError(json?.error?.message ?? "Algo deu errado. Tente de novo.", code, res.status, details);
   }
   return json as T;
 }

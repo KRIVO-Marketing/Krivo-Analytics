@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { opsCall } from "@/lib/api";
 import { getCached, invalidateCache } from "@/lib/cache";
-import { CACHE_KEYS, fetchContactDetail, type ContactDetail } from "@/lib/data";
+import { CACHE_KEYS, fetchContactDetail, fetchDeliveries, type ContactDetail } from "@/lib/data";
+import { openDelivery, type DeliverySummary } from "@/lib/delivery";
 import { brl, dueInfo, KINDS, nameOf, phoneFmt, prettyNote, STAGES, waLink, type Contact, type Member, type Stage } from "@/lib/ops";
 import { useMe } from "../AuthGate";
 import { IconInstagram, IconMessage, IconPhone } from "../Icons";
@@ -30,6 +31,7 @@ export function ContactSheet({ id, initialContact, team, askLossInitially = fals
   const [lossReason, setLossReason] = useState("");
   const [askLoss, setAskLoss] = useState(askLossInitially);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [deliveries, setDeliveries] = useState<DeliverySummary[] | null>(() => getCached<DeliverySummary[]>(CACHE_KEYS.deliveries) ?? null);
 
   const load = useCallback(async (force = false) => {
     try {
@@ -40,6 +42,7 @@ export function ContactSheet({ id, initialContact, team, askLossInitially = fals
     }
   }, [id]);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchDeliveries().then(setDeliveries).catch(() => {}); }, []);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
@@ -75,6 +78,9 @@ export function ContactSheet({ id, initialContact, team, askLossInitially = fals
 
   const c = data?.contact ?? initialContact;
   const owner = c?.owner_id ? team.find((m) => m.id === c.owner_id) : undefined;
+  // entrega do contato: a em andamento, ou a mais recente
+  const mine = (deliveries ?? []).filter((d) => d.contact_id === id);
+  const delivery = mine.find((d) => d.status !== "concluida") ?? mine[0];
 
   return (
     <Modal title={c?.name ?? "Cliente"} onClose={() => !busy && onClose()}>
@@ -164,6 +170,19 @@ export function ContactSheet({ id, initialContact, team, askLossInitially = fals
               </form>
             )}
             {c.stage === "perdido" && c.loss_reason && <p className="hint">Motivo: {c.loss_reason}</p>}
+            {c.stage === "fechado" && deliveries && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-line p-3">
+                <p className="min-w-0 flex-1 text-sm text-mute">
+                  {delivery ? "Este cliente já tem uma entrega." : "Contrato fechado: hora de iniciar a entrega."}
+                </p>
+                <button type="button" className="btn btn-primary shrink-0" onClick={() => {
+                  onClose();
+                  openDelivery(delivery ? { deliveryId: delivery.id } : { contactId: id });
+                }}>
+                  {delivery ? "Ver entrega" : "Iniciar entrega"}
+                </button>
+              </div>
+            )}
           </div>
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-2xl border border-line p-3.5 text-sm">

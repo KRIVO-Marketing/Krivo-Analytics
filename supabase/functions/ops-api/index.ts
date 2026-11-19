@@ -3,6 +3,12 @@
 // As tabelas têm RLS ativo e nenhum grant para anon/authenticated: só esta função (service_role) acessa.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from "npm:jose@5";
+import PizZip from "npm:pizzip@3.3.0";
+import Docxtemplater from "npm:docxtemplater@3.71.1";
+import CONTRACT_SPEC from "./contract-fields.json" with { type: "json" };
+import {
+  buildRenderData, checkContract, cleanContractData, CODE_TO_KEY, ContractError, contractFileName, renderDocx, type Spec,
+} from "./contract.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
 const ISSUER = `${SUPABASE_URL}/auth/v1`;
@@ -21,6 +27,7 @@ const sb = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 });
 
 class AppError extends Error {
+  details?: string[];
   constructor(public status: number, public code: string, message: string, public retryAfter?: number) {
     super(message);
   }
@@ -680,7 +687,516 @@ async function catalogDelete(i: any) {
   return { ok: true };
 }
 
+// ---------- ações: entrega (checklist, modelos, mensagens e contrato) ----------
+// Escrita segue a regra das Tarefas: qualquer membro marca item, cria nota e gera contrato.
+// Modelo do checklist, arquivos, mensagens e exclusão de entrega: só administradores.
+const SPEC = CONTRACT_SPEC as unknown as Spec;
+const BUCKET = "modelos-entrega";
+const DELIVERY_STATUS = ["ativa", "pausada", "concluida"];
+const PRODUCT_CODES = ["00", "01", "02", "03", "04", "05"];
+const TEMPLATE_CODES = ["00", "01", "02", "03", "04"];
+const METODOLOGIA_CODES = ["00", "01", "02", "03", "04"];
+const SLUG = /^[a-z0-9-]{2,60}$/;
+const MSG_KEY = /^[a-z0-9_]{2,40}$/;
+const MAX_DOC_BYTES = 10 * 1024 * 1024;
+const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const DOC_KINDS: Record<string, { mime: string; ext: string }> = {
+  pdf: { mime: "application/pdf", ext: ".pdf" },
+  docx: { mime: DOCX_MIME, ext: ".docx" },
+  json: { mime: "application/json", ext: ".json" },
+};
+const SIGNED_URL_SECONDS = 60;
+const nowIso = () => new Date().toISOString();
+const notFound = (m: string) => new AppError(404, "nao_encontrado", m);
+
+function cleanCodes(v: unknown) {
+  if (!Array.isArray(v) || !v.length || v.length > 6) throw bad("Escolha pelo menos 1 produto.");
+  const out = new Set<string>();
+  for (const c of v) out.add(oneOf(c, PRODUCT_CODES, "Produto"));
+  return [...out].sort();
+}
+// Metodologia (05) aplica os itens de Diagnóstico, Social, Local, Site e Atende
+const expandCodes = (codes: string[]) => (codes.includes("05") ? [...new Set([...codes, ...METODOLOGIA_CODES])] : codes);
+function addDays(iso: string, n: number) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return t.toISOString().slice(0, 10);
+}
+const todayIso = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10); // America/Sao_Paulo
+function contractError(e: unknown): never {
+  if (e instanceof ContractError) {
+    const err = bad(e.message);
+    err.details = e.problems;
+    throw err;
+  }
+  throw e;
+}
+
+async function getDelivery(id: string) {
+  const { data, error } = await sb.from("deliveries").select("*").eq("id", id).maybeSingle();
+  if (error) throw dbErr("Erro ao ler a entrega.");
+  if (!data) throw notFound("Entrega não encontrada.");
+  return data;
+}
+const touchDelivery = (id: string, u: Member) =>
+  sb.from("deliveries").update({ last_interaction_at: nowIso(), updated_at: nowIso(), updated_by: u.id }).eq("id", id);
+
+// resumo de progresso por entrega (itens recorrentes não contam)
+type ItemLite = { delivery_id: string; phase: number; phase_title: string; position: number; done: boolean; due_date: string | null; recurring: boolean };
+function summarize(items: ItemLite[]) {
+  const today = todayIso();
+  const open = items.filter((i) => !i.recurring && !i.done).sort((a, b) => a.phase - b.phase || a.position - b.position);
+  const total = items.filter((i) => !i.recurring).length;
+  return {
+    total,
+    done: total - open.length,
+    overdue: open.filter((i) => i.due_date && i.due_date < today).length,
+    current_phase: open[0] ? { phase: open[0].phase, title: open[0].phase_title } : null,
+  };
+}
+
+async function deliveriesList() {
+  const [dRes, iRes] = await Promise.all([
+    sb.from("deliveries").select("id,contact_id,title,product_codes,status,status_detail,owner_id,started_at,min_term_months,last_interaction_at,contract_data,created_at,updated_at,crm_contacts(name,company)").order("updated_at", { ascending: false }).limit(500),
+    sb.from("delivery_items").select("delivery_id,phase,phase_title,position,done,due_date,recurring").limit(20000),
+  ]);
+  if (dRes.error || iRes.error) throw dbErr("Erro ao listar as entregas.");
+  const byDelivery = new Map<string, ItemLite[]>();
+  for (const it of (iRes.data ?? []) as ItemLite[]) {
+    const arr = byDelivery.get(it.delivery_id) ?? [];
+    arr.push(it);
+    byDelivery.set(it.delivery_id, arr);
+  }
+  const deliveries = (dRes.data ?? []).map((d: any) => {
+    const { contract_data, crm_contacts, ...rest } = d;
+    return {
+      ...rest,
+      contact_name: crm_contacts?.name ?? null,
+      contact_company: crm_contacts?.company ?? null,
+      has_contract_data: !!contract_data && Object.keys(contract_data).length > 0,
+      ...summarize(byDelivery.get(d.id) ?? []),
+    };
+  });
+  return { deliveries };
+}
+
+// pré-preenchimento do formulário a partir do contato e da entrega
+function contractPrefill(d: any, contact: any) {
+  const produtos = (d.product_codes as string[]).map((c) => CODE_TO_KEY[c]).filter(Boolean);
+  return {
+    nome_contratante: contact?.company || contact?.name || "",
+    tipo_pessoa: contact?.company ? "pessoa jurídica" : "pessoa física",
+    doc_tipo: contact?.company ? "CNPJ" : "CPF",
+    whatsapp: contact?.phone ?? "",
+    produtos,
+    data_inicio: d.started_at,
+  };
+}
+
+async function deliveryGet(i: any) {
+  const id = uuid(i.id, "ID da entrega");
+  const d = await getDelivery(id);
+  const [contact, items, notes, contracts] = await Promise.all([
+    sb.from("crm_contacts").select("id,name,company,phone,instagram,stage,owner_id").eq("id", d.contact_id).maybeSingle(),
+    sb.from("delivery_items").select("*").eq("delivery_id", id).order("phase").order("position"),
+    sb.from("delivery_notes").select("*").eq("delivery_id", id).order("created_at", { ascending: false }).limit(200),
+    sb.from("delivery_contracts").select("id,file_name,generated_by,generated_at,size_bytes").eq("delivery_id", id).order("generated_at", { ascending: false }).limit(50),
+  ]);
+  if (contact.error || items.error || notes.error || contracts.error) throw dbErr("Erro ao ler a entrega.");
+  const status = contracts.data?.length ? "gerado" : d.contract_data && Object.keys(d.contract_data).length ? "preenchido" : "nao_iniciado";
+  return {
+    delivery: { ...d, ...summarize(items.data as ItemLite[]) },
+    contact: contact.data,
+    items: items.data,
+    notes: notes.data,
+    contracts: contracts.data,
+    contract_status: status,
+    contract_prefill: contractPrefill(d, contact.data),
+  };
+}
+
+async function deliveryCreate(i: any, u: Member) {
+  const contact_id = await checkContact(i.contact_id);
+  if (!contact_id) throw bad("Escolha o cliente.");
+  const codes = cleanCodes(i.product_codes);
+  const owner_id = await checkAssignee(i.owner_id);
+  const started_at = cleanDate(i.started_at, "A data de início") ?? todayIso();
+  const { data: contact } = await sb.from("crm_contacts").select("name,company").eq("id", contact_id).maybeSingle();
+  const { data: open } = await sb.from("deliveries").select("id").eq("contact_id", contact_id).in("status", ["ativa", "pausada"]).limit(1);
+  if (open?.length) throw new AppError(409, "ja_existe", "Este cliente já tem uma entrega em andamento.");
+  const title = i.title !== undefined && i.title !== null && String(i.title).trim()
+    ? str(i.title, "O título", 2, 120)
+    : (contact?.company || contact?.name || "Entrega").slice(0, 120);
+
+  const tplCodes = expandCodes(codes).filter((c) => TEMPLATE_CODES.includes(c));
+  const { data: tpls, error: tErr } = await sb.from("delivery_templates").select("*").order("phase").order("position");
+  if (tErr) throw dbErr("Erro ao ler o modelo do checklist.");
+  const chosen = (tpls ?? []).filter((t: any) => t.product_code === null || tplCodes.includes(t.product_code));
+
+  const { data: d, error } = await sb.from("deliveries").insert({
+    contact_id, title, product_codes: codes, status: "ativa", owner_id, started_at,
+    min_term_months: 3, created_by: u.id, updated_by: u.id,
+  }).select().single();
+  if (error) throw dbErr("Erro ao criar a entrega.");
+
+  const rows = chosen.map((t: any) => ({
+    delivery_id: d.id, template_id: t.id, phase: t.phase, phase_title: t.phase_title, position: t.position,
+    product_code: t.product_code, title: t.title, description: t.description, owner_hint: t.owner_hint,
+    recurring: t.recurring, due_date: t.due_offset_days === null || t.recurring ? null : addDays(started_at, t.due_offset_days),
+    doc_slug: t.doc_slug, message_key: t.message_key, action: t.action,
+  }));
+  if (rows.length) {
+    const { error: iErr } = await sb.from("delivery_items").insert(rows);
+    if (iErr) {
+      await sb.from("deliveries").delete().eq("id", d.id);
+      throw dbErr("Erro ao criar o checklist da entrega.");
+    }
+  }
+  await sb.from("crm_interactions").insert({ contact_id, kind: "nota", body: `Entrega iniciada (${rows.filter((r) => !r.recurring).length} itens).`, created_by: u.id });
+  return { delivery: d, items_created: rows.length };
+}
+
+async function deliveryUpdate(i: any, u: Member) {
+  const id = uuid(i.id, "ID da entrega");
+  await getDelivery(id);
+  const p: Record<string, unknown> = { updated_at: nowIso(), updated_by: u.id };
+  if (i.title !== undefined) p.title = str(i.title, "O título", 2, 120);
+  if (i.status !== undefined) p.status = oneOf(i.status, DELIVERY_STATUS, "Status");
+  if (i.status_detail !== undefined) p.status_detail = optStr(i.status_detail, "A situação", 80);
+  if (i.owner_id !== undefined) p.owner_id = await checkAssignee(i.owner_id);
+  if (i.notes !== undefined) p.notes = optStr(i.notes, "As observações", 2000);
+  if (i.started_at !== undefined) {
+    const v = cleanDate(i.started_at, "A data de início");
+    if (!v) throw bad("Informe a data de início.");
+    p.started_at = v;
+  }
+  if (i.contract_data !== undefined) {
+    try { p.contract_data = cleanContractData(i.contract_data, SPEC); } catch (e) { contractError(e); }
+  }
+  const { data, error } = await sb.from("deliveries").update(p).eq("id", id).select().single();
+  if (error) throw dbErr("Erro ao atualizar a entrega.");
+  return { delivery: data };
+}
+
+async function deliveryDelete(i: any) {
+  const id = uuid(i.id, "ID da entrega");
+  const { data: files } = await sb.from("delivery_contracts").select("storage_path").eq("delivery_id", id);
+  const { error } = await sb.from("deliveries").delete().eq("id", id);
+  if (error) throw dbErr("Erro ao remover a entrega.");
+  const paths = (files ?? []).map((f: any) => f.storage_path).filter(Boolean);
+  if (paths.length) await sb.storage.from(BUCKET).remove(paths);
+  return { ok: true };
+}
+
+async function deliveryItemUpdate(i: any, u: Member) {
+  const id = uuid(i.id, "ID do item");
+  const { data: cur, error: e1 } = await sb.from("delivery_items").select("id,delivery_id,done,note").eq("id", id).maybeSingle();
+  if (e1) throw dbErr("Erro ao ler o item.");
+  if (!cur) throw notFound("Item não encontrado.");
+  const p: Record<string, unknown> = { updated_at: nowIso() };
+  let interaction = false;
+  if (i.done !== undefined) {
+    const done = cleanBool(i.done, "Feito");
+    if (done !== cur.done) {
+      p.done = done;
+      p.done_at = done ? nowIso() : null;
+      p.done_by = done ? u.id : null;
+      interaction = true;
+    }
+  }
+  if (i.assignee_id !== undefined) p.assignee_id = await checkAssignee(i.assignee_id);
+  if (i.due_date !== undefined) p.due_date = cleanDate(i.due_date, "O prazo");
+  if (i.note !== undefined) {
+    p.note = optStr(i.note, "A nota", 1000);
+    if (p.note && p.note !== cur.note) interaction = true;
+  }
+  const { data, error } = await sb.from("delivery_items").update(p).eq("id", id).select().single();
+  if (error) throw dbErr("Erro ao atualizar o item.");
+  if (interaction) await touchDelivery(cur.delivery_id, u);
+  else await sb.from("deliveries").update({ updated_at: nowIso() }).eq("id", cur.delivery_id);
+  return { item: data };
+}
+
+async function deliveryNoteAdd(i: any, u: Member) {
+  const delivery_id = uuid(i.delivery_id, "ID da entrega");
+  await getDelivery(delivery_id);
+  const { data, error } = await sb.from("delivery_notes").insert({ delivery_id, body: str(i.body, "A nota", 1, 1000), created_by: u.id }).select().single();
+  if (error) throw dbErr("Erro ao salvar a nota.");
+  await touchDelivery(delivery_id, u);
+  return { note: data };
+}
+
+async function deliveryItemToTask(i: any, u: Member, req: Request) {
+  const id = uuid(i.id, "ID do item");
+  const { data: it } = await sb.from("delivery_items").select("*").eq("id", id).maybeSingle();
+  if (!it) throw notFound("Item não encontrado.");
+  if (it.task_id) {
+    const { data: t } = await sb.from("ops_tasks").select("id").eq("id", it.task_id).maybeSingle();
+    if (t) throw new AppError(409, "ja_existe", "Este item já tem uma tarefa.");
+  }
+  const d = await getDelivery(it.delivery_id);
+  const desc = [it.description, `Entrega: ${d.title} · Fase ${it.phase}: ${it.phase_title}`, it.note ? `Nota: ${it.note}` : null].filter(Boolean).join("\n\n");
+  const { task, emailSent, emailWarning } = await taskCreate({
+    title: String(it.title).slice(0, 120),
+    description: desc.slice(0, 2000),
+    assignee_id: i.assignee_id !== undefined ? i.assignee_id : it.assignee_id,
+    due_date: it.due_date,
+    contact_id: d.contact_id,
+    tags: ["entrega"],
+  }, u, req);
+  const { data: item, error } = await sb.from("delivery_items").update({ task_id: task.id, updated_at: nowIso() }).eq("id", id).select().single();
+  if (error) throw dbErr("Tarefa criada, mas não foi possível ligá-la ao item.");
+  return { task, item, emailSent, emailWarning };
+}
+
+// ---------- modelo do checklist (admin) ----------
+async function templatesList() {
+  const { data, error } = await sb.from("delivery_templates").select("*").order("phase").order("position").limit(500);
+  if (error) throw dbErr("Erro ao ler o modelo do checklist.");
+  return { templates: data };
+}
+async function templateFields(i: any, partial: boolean) {
+  const p: Record<string, unknown> = {};
+  const has = (k: string) => !partial || i[k] !== undefined;
+  if (has("phase")) {
+    const n = Number(i.phase);
+    if (!Number.isInteger(n) || n < 1 || n > 20) throw bad("Fase inválida (1 a 20).");
+    p.phase = n;
+  }
+  if (has("phase_title")) p.phase_title = str(i.phase_title, "O nome da fase", 2, 80);
+  if (has("title")) p.title = str(i.title, "O título", 2, 300);
+  if (has("description")) p.description = optStr(i.description, "A descrição", 1000);
+  if (has("owner_hint")) p.owner_hint = optStr(i.owner_hint, "O responsável sugerido", 40);
+  if (has("product_code")) p.product_code = i.product_code === null || i.product_code === "" || i.product_code === undefined ? null : oneOf(i.product_code, TEMPLATE_CODES, "Produto");
+  if (has("due_offset_days")) {
+    if (i.due_offset_days === null || i.due_offset_days === "" || i.due_offset_days === undefined) p.due_offset_days = null;
+    else {
+      const n = Number(i.due_offset_days);
+      if (!Number.isInteger(n) || n < 0 || n > 365) throw bad("Prazo sugerido inválido (0 a 365 dias).");
+      p.due_offset_days = n;
+    }
+  }
+  if (has("doc_slug")) {
+    const s = optStr(i.doc_slug, "O modelo", 60);
+    if (s && !SLUG.test(s)) throw bad("Modelo inválido.");
+    p.doc_slug = s;
+  }
+  if (has("message_key")) {
+    const s = optStr(i.message_key, "A mensagem", 40);
+    if (s && !MSG_KEY.test(s)) throw bad("Mensagem inválida.");
+    p.message_key = s;
+  }
+  if (has("action")) p.action = i.action === null || i.action === "" || i.action === undefined ? null : oneOf(i.action, ["contrato"], "Ação");
+  if (has("recurring")) p.recurring = i.recurring === undefined ? false : cleanBool(i.recurring, "Recorrente");
+  if (i.position !== undefined) {
+    const n = Number(i.position);
+    if (!Number.isInteger(n) || Math.abs(n) > 100000) throw bad("Posição inválida.");
+    p.position = n;
+  }
+  return p;
+}
+async function templateCreate(i: any, u: Member) {
+  const p = await templateFields(i, false);
+  if (p.position === undefined) {
+    const { data: last } = await sb.from("delivery_templates").select("position").eq("phase", p.phase as number).order("position", { ascending: false }).limit(1);
+    p.position = last?.length ? Number(last[0].position) + 1 : 0;
+  }
+  const { data, error } = await sb.from("delivery_templates").insert({ ...p, created_by: u.id, updated_by: u.id }).select().single();
+  if (error) throw dbErr("Erro ao salvar o item do modelo.");
+  return { template: data };
+}
+async function templateUpdate(i: any, u: Member) {
+  const id = uuid(i.id, "ID do item do modelo");
+  const p = await templateFields(i, true);
+  const { data, error } = await sb.from("delivery_templates").update({ ...p, updated_by: u.id, updated_at: nowIso() }).eq("id", id).select().maybeSingle();
+  if (error) throw dbErr("Erro ao atualizar o item do modelo.");
+  if (!data) throw notFound("Item do modelo não encontrado.");
+  return { template: data };
+}
+async function templateDelete(i: any) {
+  const id = uuid(i.id, "ID do item do modelo");
+  const { error } = await sb.from("delivery_templates").delete().eq("id", id);
+  if (error) throw dbErr("Erro ao remover o item do modelo.");
+  return { ok: true };
+}
+
+// ---------- modelos para download ----------
+async function docsList() {
+  const { data, error } = await sb.from("delivery_docs").select("id,slug,title,description,kind,audience,position,file_name,mime,size_bytes,updated_by,updated_at").order("position").limit(100);
+  if (error) throw dbErr("Erro ao listar os modelos.");
+  return { docs: data };
+}
+async function getDoc(slugRaw: unknown) {
+  if (typeof slugRaw !== "string" || !SLUG.test(slugRaw)) throw bad("Modelo inválido.");
+  const { data, error } = await sb.from("delivery_docs").select("*").eq("slug", slugRaw).maybeSingle();
+  if (error) throw dbErr("Erro ao ler o modelo.");
+  if (!data) throw notFound("Modelo não encontrado.");
+  return data;
+}
+async function signedDownload(path: string, fileName: string) {
+  const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS, { download: fileName });
+  if (error || !data?.signedUrl) throw new AppError(404, "arquivo_ausente", "O arquivo deste modelo ainda não foi enviado. Peça para um admin usar Substituir arquivo.");
+  return data.signedUrl;
+}
+async function docUrl(i: any) {
+  const doc = await getDoc(i.slug);
+  return { url: await signedDownload(doc.storage_path, doc.file_name), file_name: doc.file_name, expires_in: SIGNED_URL_SECONDS };
+}
+const safeFileName = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-").slice(0, 80);
+// 1) admin pede uma URL de envio assinada; 2) o navegador envia o arquivo direto ao Storage; 3) doc_replace confere e troca.
+async function docUploadUrl(i: any) {
+  const doc = await getDoc(i.slug);
+  const name = str(i.file_name, "O nome do arquivo", 3, 120);
+  const ext = name.toLowerCase().slice(name.lastIndexOf("."));
+  const kind = Object.entries(DOC_KINDS).find(([, v]) => v.ext === ext)?.[0];
+  if (!kind || (kind === "json" && doc.kind !== "json") || (doc.kind === "json" && kind !== "json")) throw bad(doc.kind === "json" ? "Envie um arquivo .json." : "Envie um arquivo PDF ou DOCX.");
+  const size = Number(i.size_bytes);
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_DOC_BYTES) throw bad("O arquivo deve ter no máximo 10 MB.");
+  const path = `${doc.slug}/${Date.now()}-${safeFileName(name)}`;
+  const { data, error } = await sb.storage.from(BUCKET).createSignedUploadUrl(path);
+  if (error || !data) throw dbErr("Não foi possível preparar o envio do arquivo.");
+  return { path, token: data.token, signed_url: data.signedUrl, mime: DOC_KINDS[kind].mime };
+}
+async function docReplace(i: any, u: Member) {
+  const doc = await getDoc(i.slug);
+  const path = str(i.path, "O caminho", 3, 200);
+  if (!path.startsWith(`${doc.slug}/`) || path.includes("..")) throw bad("Caminho do arquivo inválido.");
+  const fileName = str(i.file_name, "O nome do arquivo", 3, 120);
+  const { data: blob, error } = await sb.storage.from(BUCKET).download(path);
+  if (error || !blob) throw bad("Arquivo enviado não encontrado. Tente enviar de novo.");
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  const reject = async (m: string) => { await sb.storage.from(BUCKET).remove([path]); throw bad(m); };
+  if (buf.byteLength > MAX_DOC_BYTES) await reject("O arquivo deve ter no máximo 10 MB.");
+  const head = new TextDecoder().decode(buf.slice(0, 5));
+  let kind: string;
+  if (head.startsWith("%PDF")) kind = "pdf";
+  else if (buf[0] === 0x50 && buf[1] === 0x4b) {
+    kind = "docx";
+    try {
+      const zip = new PizZip(buf);
+      if (!zip.file("word/document.xml")) throw new Error("not docx");
+      if (doc.slug === "contrato-template-docx") new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
+    } catch {
+      await reject(doc.slug === "contrato-template-docx" ? "O template tem tags inválidas ou não é um Word válido." : "O arquivo não é um Word (.docx) válido.");
+    }
+  } else {
+    try { JSON.parse(new TextDecoder().decode(buf)); kind = "json"; } catch { kind = "outro"; }
+  }
+  if (kind! !== doc.kind) await reject(`Tipo de arquivo errado: este modelo espera ${doc.kind.toUpperCase()}.`);
+  const { data, error: upErr } = await sb.from("delivery_docs").update({
+    storage_path: path, file_name: fileName.replace(/[\\/:*?"<>|]+/g, "-"), mime: DOC_KINDS[doc.kind].mime, size_bytes: buf.byteLength,
+    updated_by: u.id, updated_at: nowIso(),
+  }).eq("id", doc.id).select("id,slug,title,description,kind,audience,position,file_name,mime,size_bytes,updated_by,updated_at").single();
+  if (upErr) throw dbErr("Erro ao atualizar o modelo.");
+  if (doc.storage_path && doc.storage_path !== path) await sb.storage.from(BUCKET).remove([doc.storage_path]);
+  if (doc.slug === "contrato-template-docx") templateCache = null;
+  return { doc: data };
+}
+async function docUpdate(i: any, u: Member) {
+  const doc = await getDoc(i.slug);
+  const p: Record<string, unknown> = { updated_by: u.id, updated_at: nowIso() };
+  if (i.title !== undefined) p.title = str(i.title, "O título", 2, 120);
+  if (i.description !== undefined) p.description = optStr(i.description, "A descrição", 500);
+  const { data, error } = await sb.from("delivery_docs").update(p).eq("id", doc.id).select("id,slug,title,description,kind,audience,position,file_name,mime,size_bytes,updated_by,updated_at").single();
+  if (error) throw dbErr("Erro ao atualizar o modelo.");
+  return { doc: data };
+}
+
+// ---------- mensagens prontas ----------
+async function messagesList() {
+  const { data, error } = await sb.from("delivery_messages").select("*").order("position");
+  if (error) throw dbErr("Erro ao ler as mensagens.");
+  return { messages: data };
+}
+async function messageUpdate(i: any, u: Member) {
+  if (typeof i.key !== "string" || !MSG_KEY.test(i.key)) throw bad("Mensagem inválida.");
+  const p: Record<string, unknown> = { updated_by: u.id, updated_at: nowIso() };
+  if (i.title !== undefined) p.title = str(i.title, "O título", 2, 80);
+  if (i.body !== undefined) p.body = str(i.body, "O texto", 2, 2000);
+  const { data, error } = await sb.from("delivery_messages").update(p).eq("key", i.key).select().maybeSingle();
+  if (error) throw dbErr("Erro ao atualizar a mensagem.");
+  if (!data) throw notFound("Mensagem não encontrada.");
+  return { message: data };
+}
+
+// ---------- contrato ----------
+let templateCache: { path: string; updatedAt: string; buf: Uint8Array } | null = null;
+async function contractTemplate() {
+  const doc = await getDoc("contrato-template-docx");
+  if (templateCache && templateCache.path === doc.storage_path && templateCache.updatedAt === doc.updated_at) return templateCache.buf;
+  const { data, error } = await sb.storage.from(BUCKET).download(doc.storage_path);
+  if (error || !data) throw new AppError(503, "template_ausente", "O template do contrato ainda não foi enviado. Peça para um admin enviar em Modelos.");
+  const buf = new Uint8Array(await data.arrayBuffer());
+  templateCache = { path: doc.storage_path, updatedAt: doc.updated_at, buf };
+  return buf;
+}
+function contractFields() {
+  return { fields: SPEC.fields, computed: SPEC.computed, product_codes: CODE_TO_KEY };
+}
+async function contractSave(i: any, u: Member) {
+  const id = uuid(i.delivery_id, "ID da entrega");
+  await getDelivery(id);
+  let data: Record<string, unknown>;
+  try { data = cleanContractData(i.data, SPEC); } catch (e) { contractError(e); }
+  const { error } = await sb.from("deliveries").update({ contract_data: data!, updated_at: nowIso(), updated_by: u.id }).eq("id", id);
+  if (error) throw dbErr("Erro ao salvar o rascunho do contrato.");
+  return { ok: true, check: checkContract(data!, SPEC), saved_at: nowIso() };
+}
+async function contractGenerate(i: any, u: Member) {
+  const id = uuid(i.delivery_id, "ID da entrega");
+  const d = await getDelivery(id);
+  let data: Record<string, unknown>;
+  try { data = cleanContractData(i.data !== undefined ? i.data : d.contract_data, SPEC); } catch (e) { contractError(e); }
+  const check = checkContract(data!, SPEC);
+  if (check.errors.length) {
+    const err = bad("Faltam dados para gerar o contrato.");
+    err.details = check.errors;
+    throw err;
+  }
+  const template = await contractTemplate();
+  let out: Uint8Array;
+  try { out = renderDocx(PizZip, Docxtemplater, template, buildRenderData(data!, SPEC)); } catch (e) { contractError(e); }
+  const fileName = contractFileName(String(data!.nome_contratante ?? d.title), todayIso());
+  const path = `gerados/${id}/${crypto.randomUUID()}.docx`;
+  const up = await sb.storage.from(BUCKET).upload(path, out!, { contentType: DOCX_MIME, upsert: false });
+  if (up.error) throw dbErr("Erro ao guardar o contrato gerado.");
+  const { data: rec, error } = await sb.from("delivery_contracts").insert({
+    delivery_id: id, data: data!, file_name: fileName, storage_path: path, size_bytes: out!.byteLength, generated_by: u.id,
+  }).select("id,file_name,generated_by,generated_at,size_bytes").single();
+  if (error) throw dbErr("Erro ao registrar o contrato gerado.");
+  await sb.from("deliveries").update({ contract_data: data!, updated_at: nowIso(), updated_by: u.id, last_interaction_at: nowIso() }).eq("id", id);
+  return { contract: rec, url: await signedDownload(path, fileName), file_name: fileName, warnings: check.warnings, expires_in: SIGNED_URL_SECONDS };
+}
+async function contractHistory(i: any) {
+  const id = uuid(i.delivery_id, "ID da entrega");
+  const { data, error } = await sb.from("delivery_contracts").select("id,file_name,generated_by,generated_at,size_bytes").eq("delivery_id", id).order("generated_at", { ascending: false }).limit(50);
+  if (error) throw dbErr("Erro ao ler o histórico de contratos.");
+  return { contracts: data };
+}
+async function contractUrl(i: any) {
+  const id = uuid(i.id, "ID do contrato");
+  const { data, error } = await sb.from("delivery_contracts").select("storage_path,file_name").eq("id", id).maybeSingle();
+  if (error) throw dbErr("Erro ao ler o contrato.");
+  if (!data?.storage_path) throw notFound("Arquivo do contrato não encontrado.");
+  return { url: await signedDownload(data.storage_path, data.file_name), file_name: data.file_name, expires_in: SIGNED_URL_SECONDS };
+}
+
 const WRITE = [
+  "contract_save",
+  "contract_generate",
+  "delivery_create",
+  "delivery_update",
+  "delivery_delete",
+  "delivery_item_update",
+  "delivery_note_add",
+  "delivery_item_to_task",
+  "delivery_template_create",
+  "delivery_template_update",
+  "delivery_template_delete",
+  "doc_upload_url",
+  "doc_replace",
+  "doc_update",
+  "message_update",
   "catalog_create",
   "catalog_update",
   "catalog_delete",
@@ -696,7 +1212,11 @@ const WRITE = [
   "team_remove",
   "password_reset_complete",
 ];
-const READ = ["me", "team", "team_list", "tasks_list", "contacts_list", "contact_get", "bootstrap", "catalog_list"];
+const READ = [
+  "me", "team", "team_list", "tasks_list", "contacts_list", "contact_get", "bootstrap", "catalog_list",
+  "contract_fields", "contract_history", "contract_url", "deliveries_list", "delivery_get", "delivery_templates_list",
+  "docs_list", "doc_url", "messages_list",
+];
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
@@ -740,11 +1260,38 @@ Deno.serve(async (req) => {
       case "catalog_create": needAdmin(user); return json(await catalogCreate(input, user), 201);
       case "catalog_update": needAdmin(user); return json(await catalogUpdate(input, user));
       case "catalog_delete": needAdmin(user); return json(await catalogDelete(input));
+      // entrega: leitura (qualquer membro)
+      case "deliveries_list": return json(await deliveriesList());
+      case "delivery_get": return json(await deliveryGet(input));
+      case "delivery_templates_list": return json(await templatesList());
+      case "docs_list": return json(await docsList());
+      case "doc_url": return json(await docUrl(input));
+      case "messages_list": return json(await messagesList());
+      case "contract_fields": return json(contractFields());
+      case "contract_history": return json(await contractHistory(input));
+      case "contract_url": return json(await contractUrl(input));
+      // entrega: escrita (mesma regra das tarefas)
+      case "delivery_create": return json(await deliveryCreate(input, user), 201);
+      case "delivery_update": return json(await deliveryUpdate(input, user));
+      case "delivery_item_update": return json(await deliveryItemUpdate(input, user));
+      case "delivery_note_add": return json(await deliveryNoteAdd(input, user), 201);
+      case "delivery_item_to_task": return json(await deliveryItemToTask(input, user, req), 201);
+      case "contract_save": return json(await contractSave(input, user));
+      case "contract_generate": return json(await contractGenerate(input, user), 201);
+      // entrega: somente administradores
+      case "delivery_delete": needAdmin(user); return json(await deliveryDelete(input));
+      case "delivery_template_create": needAdmin(user); return json(await templateCreate(input, user), 201);
+      case "delivery_template_update": needAdmin(user); return json(await templateUpdate(input, user));
+      case "delivery_template_delete": needAdmin(user); return json(await templateDelete(input));
+      case "doc_upload_url": needAdmin(user); return json(await docUploadUrl(input));
+      case "doc_replace": needAdmin(user); return json(await docReplace(input, user));
+      case "doc_update": needAdmin(user); return json(await docUpdate(input, user));
+      case "message_update": needAdmin(user); return json(await messageUpdate(input, user));
     }
     throw new AppError(400, "acao_invalida", "Ação inválida.");
   } catch (e) {
     if (e instanceof AppError) {
-      return json({ error: { code: e.code, message: e.message } }, e.status, e.retryAfter ? { "Retry-After": String(e.retryAfter) } : {});
+      return json({ error: { code: e.code, message: e.message, ...(e.details?.length ? { details: e.details } : {}) } }, e.status, e.retryAfter ? { "Retry-After": String(e.retryAfter) } : {});
     }
     console.error(e);
     return json({ error: { code: "interno", message: "Erro interno." } }, 500);

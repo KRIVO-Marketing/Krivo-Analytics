@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { getCached, subscribeCache } from "@/lib/cache";
 import { CACHE_KEYS } from "@/lib/data";
+import { onDeliveryTabRequest } from "@/lib/delivery";
 import { todayISO, type Contact, type Task } from "@/lib/ops";
 import { useMe } from "./AuthGate";
 import CatalogTab from "./catalog/CatalogTab";
+import DeliveryTab from "./delivery/DeliveryTab";
 import HomeTab from "./home/HomeTab";
 import ClientsTab from "./ClientsTab";
 import CrmTab from "./CrmTab";
@@ -25,6 +27,7 @@ const BASE_GROUPS = [
     items: [
       { id: "tarefas", label: "Tarefas", sub: "Fluxo operacional e entregas da equipe" },
       { id: "crm", label: "CRM", sub: "Pipeline comercial e retornos do dia" },
+      { id: "entrega", label: "Entrega", sub: "Checklist de entrega e modelos" },
     ],
   },
   {
@@ -44,7 +47,7 @@ const ADMIN_GROUP = {
   ],
 } as const;
 
-type TabId = "home" | "tarefas" | "crm" | "krivo" | "clientes" | "catalogo" | "equipe";
+type TabId = "home" | "tarefas" | "crm" | "entrega" | "krivo" | "clientes" | "catalogo" | "equipe";
 
 function TabIcon({ id }: { id: TabId }) {
   const props = {
@@ -65,6 +68,8 @@ function TabIcon({ id }: { id: TabId }) {
       return <svg {...props}><rect x="3" y="4" width="18" height="16" rx="3" /><path d="m8 12 2.5 2.5L16 9" /></svg>;
     case "crm":
       return <svg {...props}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></svg>;
+    case "entrega":
+      return <svg {...props}><path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z" /><path d="M16 5h2a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2" /><path d="m8.5 13.5 2.5 2.5 4.5-5" /></svg>;
     case "krivo":
       return <svg {...props}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></svg>;
     case "clientes":
@@ -108,7 +113,7 @@ export default function App() {
   const groups = isAdmin ? [...BASE_GROUPS, ADMIN_GROUP] : [...BASE_GROUPS];
   const tabs = groups.flatMap((g) => [...g.items]);
   const [tab, setTab] = useState<TabId>("home");
-  const [visited, setVisited] = useState<Record<TabId, boolean>>({ home: true, tarefas: false, crm: false, krivo: false, clientes: false, catalogo: false, equipe: false });
+  const [visited, setVisited] = useState<Record<TabId, boolean>>({ home: true, tarefas: false, crm: false, entrega: false, krivo: false, clientes: false, catalogo: false, equipe: false });
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const counts = useNavCounts();
 
@@ -117,6 +122,8 @@ export default function App() {
     setVisited((v) => ({ ...v, [id]: true }));
     refs.current[id]?.focus();
   };
+  // CRM -> Entrega ("Iniciar entrega" / "Ver entrega" no contato Fechado)
+  useEffect(() => onDeliveryTabRequest(() => { setTab("entrega"); setVisited((v) => ({ ...v, entrega: true })); }), []);
   const onKey = (e: React.KeyboardEvent, i: number) => {
     if (e.key === "ArrowRight" || e.key === "ArrowDown") {
       e.preventDefault();
@@ -253,6 +260,7 @@ export default function App() {
           <div role="tabpanel" id="panel-home" aria-labelledby="tab-home" hidden={tab !== "home"}>{visited.home && <HomeTab go={select} />}</div>
           <div role="tabpanel" id="panel-tarefas" aria-labelledby="tab-tarefas" hidden={tab !== "tarefas"}>{visited.tarefas && <TasksTab />}</div>
           <div role="tabpanel" id="panel-crm" aria-labelledby="tab-crm" hidden={tab !== "crm"}>{visited.crm && <CrmTab />}</div>
+          <div role="tabpanel" id="panel-entrega" aria-labelledby="tab-entrega" hidden={tab !== "entrega"}>{visited.entrega && <DeliveryTab />}</div>
           <div role="tabpanel" id="panel-krivo" aria-labelledby="tab-krivo" hidden={tab !== "krivo"}>{visited.krivo && <KrivoTab />}</div>
           <div role="tabpanel" id="panel-clientes" aria-labelledby="tab-clientes" hidden={tab !== "clientes"}>{visited.clientes && <ClientsTab />}</div>
           {isAdmin && (
@@ -268,7 +276,7 @@ export default function App() {
       <div
         role="tablist"
         aria-label="Seções"
-        className={`fixed inset-x-0 bottom-0 z-40 grid ${isAdmin ? "grid-cols-7" : "grid-cols-5"} border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden`}
+        className={`fixed inset-x-0 bottom-0 z-40 grid ${isAdmin ? "grid-cols-8" : "grid-cols-6"} border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden`}
       >
         {tabs.map((t, i) => {
           const active = tab === t.id;
@@ -292,7 +300,7 @@ export default function App() {
                 aria-hidden
                 className={`h-0.5 w-8 rounded-full transition-opacity ${active ? "bg-[var(--accent)] opacity-100" : "opacity-0"}`}
               />
-              <span className={`relative rounded-xl px-3 py-1 transition ${active ? "bg-[var(--accent)] text-white shadow-sm" : ""}`}>
+              <span className={`relative rounded-xl px-2.5 py-1 transition ${active ? "bg-[var(--accent)] text-white shadow-sm" : ""}`}>
                 <TabIcon id={t.id} />
                 {badge > 0 && (
                   <span

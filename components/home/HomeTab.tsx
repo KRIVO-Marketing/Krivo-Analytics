@@ -1,13 +1,14 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { getCached, subscribeCache } from "@/lib/cache";
-import { CACHE_KEYS, fetchContacts, fetchTasks } from "@/lib/data";
+import { CACHE_KEYS, fetchContacts, fetchDeliveries, fetchTasks } from "@/lib/data";
+import { isIdle, type DeliverySummary } from "@/lib/delivery";
 import { brl, dueInfo, nameOf, STAGES, TASK_STATUS, todayISO, type Contact, type Task } from "@/lib/ops";
 import { useMe } from "../AuthGate";
 import { useTeam } from "../opsui";
 import { ChatPanel } from "./ChatPanel";
 
-type Go = (tab: "tarefas" | "crm") => void;
+type Go = (tab: "tarefas" | "crm" | "entrega") => void;
 
 const localDay = (iso: string) => {
   const d = new Date(iso);
@@ -26,6 +27,28 @@ function Kpi({ label, value, hint, tone, onClick }: { label: string; value: stri
     <button type="button" onClick={onClick} className="card p-4 text-left transition hover:border-[var(--accent)]">{body}</button>
   ) : (
     <div className="card p-4">{body}</div>
+  );
+}
+
+// Resumo pequeno da aba Entrega: ativas, itens atrasados e clientes sem interação há mais de 5 dias
+function DeliveryStrip({ go }: { go: Go }) {
+  const [list, setList] = useState<DeliverySummary[] | null>(() => getCached<DeliverySummary[]>(CACHE_KEYS.deliveries) ?? null);
+  useEffect(() => {
+    const u = subscribeCache(CACHE_KEYS.deliveries, () => setList(getCached<DeliverySummary[]>(CACHE_KEYS.deliveries) ?? null));
+    fetchDeliveries().then(setList).catch(() => {});
+    return u;
+  }, []);
+  if (!list) return null;
+  const active = list.filter((d) => d.status === "ativa");
+  const late = active.reduce((n, d) => n + d.overdue, 0);
+  const idle = active.filter(isIdle).length;
+  return (
+    <button type="button" onClick={() => go("entrega")} aria-label="Abrir Entrega"
+      className="card grid w-full grid-cols-3 gap-3 p-4 text-left transition hover:border-[var(--accent)]">
+      <span><span className="block text-xs text-mute">Entregas ativas</span><span className="mt-1 block text-xl font-semibold tabular-nums text-ink">{active.length}</span></span>
+      <span><span className="block text-xs text-mute">Itens atrasados</span><span className={`mt-1 block text-xl font-semibold tabular-nums ${late ? "text-neg" : "text-ink"}`}>{late}</span></span>
+      <span><span className="block text-xs text-mute">Sem interação +5 dias</span><span className={`mt-1 block text-xl font-semibold tabular-nums ${idle ? "text-[#b7791f]" : "text-ink"}`}>{idle}</span></span>
+    </button>
   );
 }
 
@@ -117,6 +140,8 @@ export default function HomeTab({ go }: { go: Go }) {
           <Kpi label="Retornos no CRM" value={d.followUps.length} hint="vencidos ou de hoje" tone={d.followUps.length ? "neg" : undefined} onClick={() => go("crm")} />
           <Kpi label="Em negociação" value={brl(d.pipeline) || "R$ 0,00"} hint={d.won ? `${brl(d.won)} fechado` : `${d.active.length} contatos ativos`} onClick={() => go("crm")} />
         </div>
+
+        <DeliveryStrip go={go} />
 
         <div className="grid gap-5 xl:grid-cols-2">
           <section className="card p-4 sm:p-5" aria-label="Tarefas por status">
