@@ -4,7 +4,7 @@ import { ApiError, opsCall } from "@/lib/api";
 import { fetchContractFields } from "@/lib/data";
 import { downloadUrl, PASSWORD_WARNING, productByKey, type FieldSpec } from "@/lib/delivery";
 import {
-  activeProducts, buildRenderData, checkContract, dateExtenso, GROUP_PRODUCT, moneyText, validCNPJ, validCPF, type Spec,
+  activeProducts, brl, buildRenderData, checkContract, dateExtenso, GROUP_PRODUCT, moneyText, parseMoney, validCNPJ, validCPF, type Spec,
 } from "@/supabase/functions/ops-api/contract";
 import { FormError } from "../opsui";
 import { Modal } from "../ui";
@@ -149,7 +149,7 @@ export function ContractForm({ deliveryId, saved, prefill, onClose, onSaved, onG
               <fieldset key={g} className="card space-y-4 p-4">
                 <legend className="px-1 text-sm font-semibold text-ink">{g}</legend>
                 {spec.fields.filter((f) => f.group === g).map((f) => (
-                  <Field key={f.key} f={f} data={data} set={set} />
+                  <Field key={f.key} f={f} data={data} set={set} hasSite={!!on.site} />
                 ))}
               </fieldset>
             ))}
@@ -182,6 +182,26 @@ export function ContractForm({ deliveryId, saved, prefill, onClose, onSaved, onG
         </div>
       </div>
     </Modal>
+  );
+}
+
+function SiteSplit({ onSplit }: { onSplit: (total: string) => void }) {
+  const [total, setTotal] = useState("");
+  const n = parseMoney(total);
+  return (
+    <div className="mb-3 rounded-xl border border-line bg-[var(--surface-2)] p-3">
+      <p className="text-sm font-medium text-ink">KRIVO Site: 50% na entrada e 50% na entrega</p>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex-1">
+          <label className="label" htmlFor="site-total">Valor total do projeto do Site</label>
+          <input id="site-total" className="field" inputMode="decimal" placeholder="3000" value={total} onChange={(e) => setTotal(e.target.value)} />
+        </div>
+        <button type="button" className="btn btn-primary shrink-0" disabled={n === null || n <= 0} onClick={() => onSplit(total)}>Criar as 2 parcelas</button>
+      </div>
+      {n !== null && n > 0 && (
+        <p className="hint">Entrada de {brl(Math.round(n * 100 / 2) / 100)} na assinatura e {brl(Math.round((n - Math.round(n * 100 / 2) / 100) * 100) / 100)} na entrega do site. Você pode ajustar as linhas depois.</p>
+      )}
+    </div>
   );
 }
 
@@ -249,7 +269,7 @@ function Preview({ p, check }: { p: Record<string, unknown>; check: { errors: st
   );
 }
 
-function Field({ f, data, set }: { f: FieldSpec; data: Data; set: (k: string, v: unknown) => void }) {
+function Field({ f, data, set, hasSite }: { f: FieldSpec; data: Data; set: (k: string, v: unknown) => void; hasSite?: boolean }) {
   const id = `cf-${f.key}`;
   const kind = kindOf(f.type);
   const opts = optionsOf(f.type);
@@ -312,9 +332,24 @@ function Field({ f, data, set }: { f: FieldSpec; data: Data; set: (k: string, v:
   if (kind === "rows") {
     const rows = Array.isArray(v) ? (v as Row[]) : [];
     const upd = (i: number, k: keyof Row, val: string) => set(f.key, rows.map((r, j) => (j === i ? { ...r, [k]: val } : r)));
+    // KRIVO Site: 50% na entrada e 50% na entrega. Cria as duas parcelas a partir do valor total do projeto.
+    const splitSite = (totalText: string) => {
+      const total = parseMoney(totalText);
+      if (total === null || total <= 0) return;
+      const first = Math.round(total * 100 / 2) / 100;
+      const second = Math.round((total - first) * 100) / 100;
+      const fmt = (n: number) => n.toFixed(2).replace(".", ",");
+      const kept = rows.filter((r) => !/^KRIVO Site – (entrada|entrega)/.test(r.item ?? ""));
+      set(f.key, [
+        ...kept,
+        { item: "KRIVO Site – entrada (50%)", valor: fmt(first), vencimento: "Na assinatura do contrato", forma: "Pix" },
+        { item: "KRIVO Site – entrega (50%)", valor: fmt(second), vencimento: "Na entrega do site", forma: "Pix" },
+      ]);
+    };
     return (
       <fieldset>
         <legend className="label">{f.label} <span className="text-neg" aria-hidden>*</span></legend>
+        {hasSite && <SiteSplit onSplit={splitSite} />}
         <ul className="space-y-3">
           {rows.map((r, i) => (
             <li key={i} className="rounded-xl border border-line p-3">
