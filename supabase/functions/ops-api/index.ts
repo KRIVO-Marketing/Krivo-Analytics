@@ -190,6 +190,18 @@ async function checkAssignee(v: unknown) {
   if (!(await memberIds()).has(id)) throw bad("Esse responsável não faz parte da equipe.");
   return id;
 }
+// Lista de responsáveis (1 ou mais). Aceita assignee_ids (lista) ou assignee_id (legado).
+async function checkAssignees(i: any): Promise<string[]> {
+  const raw = i.assignee_ids !== undefined ? i.assignee_ids : (i.assignee_id ? [i.assignee_id] : []);
+  if (raw === null) return [];
+  if (!Array.isArray(raw) || raw.length > 20) throw bad("Responsáveis inválidos.");
+  const out: string[] = [];
+  for (const v of raw) {
+    const id = await checkAssignee(v);
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out;
+}
 async function checkContact(v: unknown) {
   if (v === undefined || v === null || v === "") return null;
   const id = uuid(v, "Cliente");
@@ -442,6 +454,26 @@ async function passwordResetComplete(actor: Member) {
 }
 
 // ---------- ações: tarefas ----------
+// Avisa por e-mail só quem foi adicionado agora (não estava em `before`).
+async function notifyTaskAssignees(task: any, before: string[], u: Member, req: Request) {
+  const added = ((task.assignee_ids as string[] | null) ?? []).filter((id) => !before.includes(id));
+  let emailSent = false;
+  let emailWarning: string | undefined;
+  for (const id of added) {
+    const n = await notifyTaskAssignee({
+      assigneeId: id,
+      taskTitle: task.title,
+      status: task.status,
+      dueDate: task.due_date,
+      contactId: task.contact_id,
+      actorEmail: u.email,
+      appUrl: appUrlFromReq(req),
+    });
+    emailSent = emailSent || n.emailSent;
+    if (n.emailWarning) emailWarning = n.emailWarning;
+  }
+  return { emailSent, emailWarning };
+}
 async function tasksList() {
   const { data, error } = await sb.from("ops_tasks").select("*").order("position", { ascending: true }).order("created_at", { ascending: false }).limit(1000);
   if (error) throw dbErr("Erro ao listar as tarefas.");
@@ -457,7 +489,7 @@ async function taskCreate(i: any, u: Member, req: Request) {
     title: str(i.title, "O título", 2, 120),
     description: optStr(i.description, "A descrição", 2000),
     status,
-    assignee_id: await checkAssignee(i.assignee_id),
+    ...(await (async () => { const ids = await checkAssignees(i); return { assignee_ids: ids, assignee_id: ids[0] ?? null }; })()),
     due_date: cleanDate(i.due_date, "O prazo"),
     tags: cleanTags(i.tags),
     contact_id: await checkContact(i.contact_id),
@@ -467,22 +499,8 @@ async function taskCreate(i: any, u: Member, req: Request) {
   };
   const { data, error } = await sb.from("ops_tasks").insert(row).select().single();
   if (error) throw dbErr("Erro ao salvar a tarefa.");
-  let emailSent = false;
-  let emailWarning: string | undefined;
-  if (data.assignee_id) {
-    const n = await notifyTaskAssignee({
-      assigneeId: data.assignee_id,
-      taskTitle: data.title,
-      status: data.status,
-      dueDate: data.due_date,
-      contactId: data.contact_id,
-      actorEmail: u.email,
-      appUrl: appUrlFromReq(req),
-    });
-    emailSent = n.emailSent;
-    emailWarning = n.emailWarning;
-  }
-  return { task: data, emailSent, emailWarning };
+  const n = await notifyTaskAssignees(data, [], u, req);
+  return { task: data, emailSent: n.emailSent, emailWarning: n.emailWarning };
 }
 async function taskUpdate(i: any, u: Member, req: Request) {
   const id = uuid(i.id, "ID da tarefa");
@@ -492,7 +510,11 @@ async function taskUpdate(i: any, u: Member, req: Request) {
   const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (i.title !== undefined) p.title = str(i.title, "O título", 2, 120);
   if (i.description !== undefined) p.description = optStr(i.description, "A descrição", 2000);
-  if (i.assignee_id !== undefined) p.assignee_id = await checkAssignee(i.assignee_id);
+  if (i.assignee_ids !== undefined || i.assignee_id !== undefined) {
+    const ids = await checkAssignees(i);
+    p.assignee_ids = ids;
+    p.assignee_id = ids[0] ?? null;
+  }
   if (i.due_date !== undefined) p.due_date = cleanDate(i.due_date, "O prazo");
   if (i.tags !== undefined) p.tags = cleanTags(i.tags);
   if (i.contact_id !== undefined) p.contact_id = await checkContact(i.contact_id);
@@ -507,22 +529,8 @@ async function taskUpdate(i: any, u: Member, req: Request) {
   if (i.position !== undefined) p.position = cleanPosition(i.position);
   const { data, error } = await sb.from("ops_tasks").update(p).eq("id", id).select().single();
   if (error) throw dbErr("Erro ao atualizar a tarefa.");
-  let emailSent = false;
-  let emailWarning: string | undefined;
-  if (data.assignee_id && data.assignee_id !== cur.assignee_id) {
-    const n = await notifyTaskAssignee({
-      assigneeId: data.assignee_id,
-      taskTitle: data.title,
-      status: data.status,
-      dueDate: data.due_date,
-      contactId: data.contact_id,
-      actorEmail: u.email,
-      appUrl: appUrlFromReq(req),
-    });
-    emailSent = n.emailSent;
-    emailWarning = n.emailWarning;
-  }
-  return { task: data, emailSent, emailWarning };
+  const n = await notifyTaskAssignees(data, (cur.assignee_ids as string[] | null) ?? (cur.assignee_id ? [cur.assignee_id] : []), u, req);
+  return { task: data, emailSent: n.emailSent, emailWarning: n.emailWarning };
 }
 async function taskDelete(i: any, u: Member) {
   const id = uuid(i.id, "ID da tarefa");

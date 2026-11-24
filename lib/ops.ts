@@ -29,7 +29,7 @@ export const KINDS = [
 
 export type Task = {
   id: string; title: string; description: string | null; status: TaskStatus;
-  assignee_id: string | null; due_date: string | null; tags: string[]; contact_id: string | null;
+  assignee_id: string | null; assignee_ids: string[]; due_date: string | null; tags: string[]; contact_id: string | null;
   position: number; completed_at: string | null; created_by: string | null; created_at: string; updated_at: string;
 };
 export type Contact = {
@@ -100,4 +100,9 @@ export function prettyNote(body: string) {
   const m = /^Estágio: (\w+) → (\w+)$/.exec(body);
   if (!m) return body;
   return `Estágio: ${stageOf(m[1])?.label ?? m[1]} → ${stageOf(m[2])?.label ?? m[2]}`;
+}
+
+// Responsáveis de uma tarefa (compatível com tarefas antigas sem assignee_ids).
+export function taskAssigneeIds(t: Pick<Task, "assignee_id" | "assignee_ids">): string[] {
+  return t.assignee_ids?.length ? t.assignee_ids : t.assignee_id ? [t.assignee_id] : [];
 }

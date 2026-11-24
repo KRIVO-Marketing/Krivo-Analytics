@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { getCached, subscribeCache } from "@/lib/cache";
 import { CACHE_KEYS, fetchContacts, fetchDeliveries, fetchTasks } from "@/lib/data";
 import { isIdle, type DeliverySummary } from "@/lib/delivery";
-import { brl, dueInfo, nameOf, STAGES, TASK_STATUS, todayISO, type Contact, type Task } from "@/lib/ops";
+import { brl, dueInfo, nameOf, STAGES, taskAssigneeIds, TASK_STATUS, todayISO, type Contact, type Task } from "@/lib/ops";
 import { useMe } from "../AuthGate";
 import { useTeam } from "../opsui";
 import { ChatPanel } from "./ChatPanel";
@@ -87,7 +87,7 @@ export default function HomeTab({ go }: { go: Go }) {
     const open = tasks.filter((t) => t.status !== "concluida");
     const overdue = open.filter((t) => t.due_date && t.due_date < today);
     const dueToday = open.filter((t) => t.due_date === today);
-    const mine = open.filter((t) => t.assignee_id === me.id);
+    const mine = open.filter((t) => taskAssigneeIds(t).includes(me.id));
     const active = contacts.filter((c) => c.stage !== "fechado" && c.stage !== "perdido");
     const followUps = active.filter((c) => c.next_contact_at && c.next_contact_at <= today);
     const pipeline = active.reduce((a, c) => a + (Number(c.value) || 0), 0);
@@ -191,7 +191,7 @@ export default function HomeTab({ go }: { go: Go }) {
                     <li key={t.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                       <span className="min-w-0 truncate text-ink">{t.title}</span>
                       <span className="flex shrink-0 items-center gap-2 text-xs">
-                        {t.assignee_id && <span className="text-mute">{nameOf(byId.get(t.assignee_id))}</span>}
+                        {taskAssigneeIds(t).length > 0 && <span className="text-mute">{taskAssigneeIds(t).map((id) => nameOf(byId.get(id))).join(", ")}</span>}
                         <span className={due?.late ? "font-medium text-neg" : "text-mute"}>{due?.text}</span>
                       </span>
                     </li>

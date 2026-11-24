@@ -27,6 +27,22 @@ export function Avatar({ m, size = 28 }: { m?: Member | null; size?: number }) {
   );
 }
 
+export function AvatarGroup({ members, size = 28 }: { members: Member[]; size?: number }) {
+  if (!members.length) return null;
+  const shown = members.slice(0, 3);
+  const extra = members.length - shown.length;
+  return (
+    <span className="inline-flex items-center -space-x-2" title={members.map((m) => m.email).join(", ")}>
+      {shown.map((m) => (
+        <span key={m.id} className="rounded-full ring-2 ring-[var(--card,#fff)]"><Avatar m={m} size={size} /></span>
+      ))}
+      {extra > 0 && (
+        <span style={{ width: size, height: size }} className="inline-flex items-center justify-center rounded-full bg-[var(--grid)] text-xs text-mute ring-2 ring-[var(--card,#fff)]">+{extra}</span>
+      )}
+    </span>
+  );
+}
+
 export function Pill({ color, children }: { color: string; children: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-0.5 text-xs">

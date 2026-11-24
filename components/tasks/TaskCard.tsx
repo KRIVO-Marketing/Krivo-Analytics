@@ -1,11 +1,11 @@
 "use client";
 import { dueInfo, TASK_STATUS, type Member, type Task, type TaskStatus } from "@/lib/ops";
 import { IconUser } from "../Icons";
-import { Avatar } from "../opsui";
+import { AvatarGroup } from "../opsui";
 
 type Props = {
   t: Task;
-  assignee?: Member;
+  assignees?: Member[];
   desktop: boolean;
   client?: string;
   onOpen: () => void;
@@ -14,7 +14,7 @@ type Props = {
   onDragStart: () => void;
 };
 
-export function TaskCard({ t, assignee, desktop, client, onOpen, onToggle, onStatusChange, onDragStart }: Props) {
+export function TaskCard({ t, assignees, desktop, client, onOpen, onToggle, onStatusChange, onDragStart }: Props) {
   const due = t.status === "concluida" ? null : dueInfo(t.due_date);
   const done = t.status === "concluida";
   const statusMeta = TASK_STATUS.find((s) => s.id === t.status);
@@ -78,7 +78,7 @@ export function TaskCard({ t, assignee, desktop, client, onOpen, onToggle, onSta
         </button>
 
         <span className="flex items-center pr-3">
-          <Avatar m={assignee} />
+          <AvatarGroup members={assignees ?? []} />
         </span>
       </div>
 

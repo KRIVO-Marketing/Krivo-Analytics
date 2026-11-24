@@ -119,7 +119,7 @@ async function buildContext(user: Member): Promise<string> {
   const isAdmin = user.role === "admin";
 
   const [tasksR, contactsR, membersR, usersR, propsR, goalsR, catalogR, intsR] = await Promise.all([
-    sb.from("ops_tasks").select("title,description,status,due_date,assignee_id,tags,contact_id,completed_at").limit(1000),
+    sb.from("ops_tasks").select("title,description,status,due_date,assignee_id,assignee_ids,tags,contact_id,completed_at").limit(1000),
     sb.from("crm_contacts").select("id,name,company,stage,value,niche,city,source,next_contact_at,owner_id,loss_reason,notes").limit(1000),
     sb.from("ga4_members").select("user_id"),
     sb.auth.admin.listUsers({ page: 1, perPage: 200 }),
@@ -152,7 +152,10 @@ async function buildContext(user: Member): Promise<string> {
   const sevenAgo = new Date(Date.now() - 7 * 864e5).toISOString();
   const doneWeek = tasks.filter((t: any) => t.status === "concluida" && t.completed_at && t.completed_at >= sevenAgo).length;
   const perPerson = new Map<string, number>();
-  for (const t of open) perPerson.set(who((t as any).assignee_id), (perPerson.get(who((t as any).assignee_id)) ?? 0) + 1);
+  for (const t of open) {
+    const ids: string[] = (t as any).assignee_ids?.length ? (t as any).assignee_ids : [(t as any).assignee_id ?? null];
+    for (const id of ids) perPerson.set(who(id), (perPerson.get(who(id)) ?? 0) + 1);
+  }
   L.push(`## TAREFAS (total ${tasks.length})`);
   L.push(`Por status: ${byStatus}`);
   L.push(`Abertas: ${open.length} | Atrasadas: ${overdue.length} | Vencem hoje: ${dueToday.length} | Concluídas nos últimos 7 dias: ${doneWeek}`);
@@ -161,7 +164,7 @@ async function buildContext(user: Member): Promise<string> {
   L.push(`Tarefas abertas (até 40, por prazo):`);
   for (const t of sortedOpen.slice(0, 40) as any[]) {
     const tag = t.due_date && t.due_date < today ? " ATRASADA" : "";
-    L.push(`- [${TASK_STATUS[t.status] ?? t.status}] ${cut(t.title, 80)} | resp: ${who(t.assignee_id)} | prazo: ${dm(t.due_date)}${tag}${t.contact_id ? ` | cliente: ${contactName.get(t.contact_id) ?? "?"}` : ""}${t.description ? ` | nota: ${cut(t.description, 70)}` : ""}`);
+    L.push(`- [${TASK_STATUS[t.status] ?? t.status}] ${cut(t.title, 80)} | resp: ${((t as any).assignee_ids?.length ? (t as any).assignee_ids : [t.assignee_id]).map(who).join(", ")} | prazo: ${dm(t.due_date)}${tag}${t.contact_id ? ` | cliente: ${contactName.get(t.contact_id) ?? "?"}` : ""}${t.description ? ` | nota: ${cut(t.description, 70)}` : ""}`);
   }
   if (sortedOpen.length > 40) L.push(`(+${sortedOpen.length - 40} tarefas abertas não listadas)`);
 

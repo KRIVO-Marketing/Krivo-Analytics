@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { opsCall } from "@/lib/api";
-import { nameOf, TASK_STATUS, todayISO, type Contact, type Member, type Task, type TaskStatus } from "@/lib/ops";
+import { nameOf, TASK_STATUS, todayISO, taskAssigneeIds, type Contact, type Member, type Task, type TaskStatus } from "@/lib/ops";
 import { useMe } from "../AuthGate";
 import { FormError } from "../opsui";
 import { Modal } from "../ui";
@@ -20,7 +20,9 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
   const { me } = useMe();
   const [title, setTitle] = useState(task.title);
   const [status, setStatus] = useState<TaskStatus>(task.status);
-  const [assignee, setAssignee] = useState(task.assignee_id ?? "");
+  const [assignees, setAssignees] = useState<string[]>(taskAssigneeIds(task));
+  const addAssignee = (id: string) => setAssignees((a) => (a.includes(id) ? a : [...a, id]));
+  const toggleAssignee = (id: string) => setAssignees((a) => (a.includes(id) ? a.filter((x) => x !== id) : [...a, id]));
   const [due, setDue] = useState(task.due_date ?? "");
   const [desc, setDesc] = useState(task.description ?? "");
   const [tags, setTags] = useState(task.tags.join(", "));
@@ -45,7 +47,7 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
         id: task.id,
         title,
         status,
-        assignee_id: assignee || null,
+        assignee_ids: assignees,
         due_date: due || null,
         description: desc,
         tags: tags.split(",").map((x) => x.trim()).filter(Boolean),
@@ -84,7 +86,7 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
             onChange={setTitle}
             team={team}
             contacts={contacts}
-            onPickMember={(m) => setAssignee(m.id)}
+            onPickMember={(m) => addAssignee(m.id)}
             onPickContact={(c) => setContact(c.id)}
             maxLength={120}
             required
@@ -110,16 +112,22 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="label" htmlFor="t-asg">Responsável</label>
-            <select id="t-asg" className="field" value={assignee} onChange={(e) => setAssignee(e.target.value)}>
-              <option value="">Sem responsável</option>
+            <span className="label" id="t-asg">Responsáveis</span>
+            <div className="flex flex-wrap gap-2" role="group" aria-labelledby="t-asg">
               {team.map((m) => (
-                <option key={m.id} value={m.id}>
+                <button
+                  key={m.id}
+                  type="button"
+                  aria-pressed={assignees.includes(m.id)}
+                  onClick={() => toggleAssignee(m.id)}
+                  className={`btn ${assignees.includes(m.id) ? "btn-primary" : ""}`}
+                >
                   {nameOf(m)}
                   {m.id === me.id ? " (eu)" : ""}
-                </option>
+                </button>
               ))}
-            </select>
+            </div>
+            <p className="hint">{assignees.length ? `${assignees.length} selecionado(s). Toque de novo para remover.` : "Sem responsável. Escolha 1 ou mais."}</p>
           </div>
           <div>
             <label className="label" htmlFor="t-due">Prazo</label>
@@ -141,7 +149,7 @@ export function TaskSheet({ task, team, contacts, onClose, onSaved, onDeleted }:
             onChange={setDesc}
             team={team}
             contacts={contacts}
-            onPickMember={(m) => setAssignee(m.id)}
+            onPickMember={(m) => addAssignee(m.id)}
             onPickContact={(c) => setContact(c.id)}
             maxLength={2000}
           />

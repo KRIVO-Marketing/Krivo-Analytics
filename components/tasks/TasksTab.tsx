@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { opsCall } from "@/lib/api";
 import { getCached, subscribeCache } from "@/lib/cache";
 import { CACHE_KEYS, fetchContacts, fetchTasks, updateTasksCache } from "@/lib/data";
-import { nameOf, TASK_STATUS, type Contact, type Task, type TaskStatus } from "@/lib/ops";
+import { nameOf, TASK_STATUS, taskAssigneeIds, type Contact, type Member, type Task, type TaskStatus } from "@/lib/ops";
 import { useMe } from "../AuthGate";
 import { ChipRow, EmptyState, useTeam } from "../opsui";
 import { ErrorBox } from "../ui";
@@ -21,7 +21,7 @@ export default function TasksTab() {
   const [status, setStatus] = useState<TaskStatus>("a_fazer");
   const [mine, setMine] = useState(false);
   const [draft, setDraft] = useState("");
-  const [draftAssignee, setDraftAssignee] = useState<string | null>(null);
+  const [draftAssignees, setDraftAssignees] = useState<string[]>([]);
   const [draftContact, setDraftContact] = useState<string | null>(null);
   const [emailNotice, setEmailNotice] = useState<{ text: string; warn?: boolean } | null>(null);
   const [adding, setAdding] = useState(false);
@@ -73,7 +73,7 @@ export default function TasksTab() {
     };
   }, [load]);
 
-  const visible = useMemo(() => (mine ? tasks.filter((t) => t.assignee_id === me.id) : tasks), [tasks, mine, me.id]);
+  const visible = useMemo(() => (mine ? tasks.filter((t) => taskAssigneeIds(t).includes(me.id)) : tasks), [tasks, mine, me.id]);
   const col = (s: TaskStatus) => visible.filter((t) => t.status === s);
 
   // Mudança otimista: a tela responde na hora; se o servidor recusar, recarrega e avisa.
@@ -102,12 +102,12 @@ export default function TasksTab() {
         action: "task_create",
         title,
         status,
-        assignee_id: draftAssignee ?? me.id,
+        assignee_ids: draftAssignees.length ? draftAssignees : [me.id],
         contact_id: draftContact ?? null,
       });
       updateTasksCache((all) => [r.task, ...all]);
       setDraft("");
-      setDraftAssignee(null);
+      setDraftAssignees([]);
       setDraftContact(null);
       setError(null);
       if (r.emailWarning) setEmailNotice({ text: r.emailWarning, warn: true });
@@ -133,7 +133,7 @@ export default function TasksTab() {
               onChange={setDraft}
               team={team}
               contacts={contacts}
-              onPickMember={(m) => setDraftAssignee(m.id)}
+              onPickMember={(m) => setDraftAssignees((a) => (a.includes(m.id) ? a : [...a, m.id]))}
               onPickContact={(c) => setDraftContact(c.id)}
               maxLength={120}
               placeholder={`Nova tarefa em “${activeLabel}” (digite @ para atribuir sócio ou cliente)`}
@@ -144,14 +144,14 @@ export default function TasksTab() {
             {adding ? "…" : "+ Adicionar"}
           </button>
         </div>
-        {(draftAssignee || draftContact) && (
+        {(draftAssignees.length > 0 || draftContact) && (
           <div className="flex flex-wrap gap-2 text-xs">
-            {draftAssignee && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-2.5 py-1 font-medium text-accent">
-                Responsável: {nameOf(byId.get(draftAssignee))}
-                <button type="button" onClick={() => setDraftAssignee(null)} aria-label="Remover responsável">×</button>
+            {draftAssignees.map((id) => (
+              <span key={id} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-2.5 py-1 font-medium text-accent">
+                Responsável: {nameOf(byId.get(id))}
+                <button type="button" onClick={() => setDraftAssignees((a) => a.filter((x) => x !== id))} aria-label="Remover responsável">×</button>
               </span>
-            )}
+            ))}
             {draftContact && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-[color-mix(in_srgb,var(--pos)_14%,transparent)] px-2.5 py-1 font-medium text-pos">
                 Cliente: {contactNames.get(draftContact)}
@@ -234,7 +234,7 @@ export default function TasksTab() {
                     t={t}
                     desktop={desktop}
                     client={t.contact_id ? contactNames.get(t.contact_id) : undefined}
-                    assignee={t.assignee_id ? byId.get(t.assignee_id) : undefined}
+                    assignees={taskAssigneeIds(t).map((id) => byId.get(id)).filter((m): m is Member => !!m)}
                     onOpen={() => setOpen(t)}
                     onToggle={() => patch(t, { status: t.status === "concluida" ? "a_fazer" : "concluida" })}
                     onStatusChange={(nextStatus) => {
