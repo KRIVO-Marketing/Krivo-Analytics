@@ -2,6 +2,7 @@
 import { ApiError, apiRead, opsCall } from "./api";
 import type { Me } from "./auth";
 import { cachedFetch, getCached, peekCached, setCached } from "./cache";
+import type { FinEntry } from "./finance";
 import type { CatalogItem, Contact, Interaction, Member, Task } from "./ops";
 import type { ContractFieldsResponse, DeliveryDetail, DeliveryDoc, DeliveryMessage, DeliverySummary, DeliveryTemplate } from "./delivery";
 import type { Goal, Info, Metrics, Property, RealtimeMetrics } from "./types";
@@ -20,6 +21,7 @@ export const CACHE_KEYS = {
   tasks: "tasks",
   contacts: "contacts",
   catalog: "catalog",
+  finance: "finance",
   properties: "properties",
   info: "info",
   goals: "goals",
@@ -72,6 +74,13 @@ export const fetchCatalog = (force = false) =>
   cachedFetch(
     CACHE_KEYS.catalog,
     () => opsCall<{ items: CatalogItem[] }>({ action: "catalog_list" }).then((r) => r.items),
+    { force },
+  );
+
+export const fetchFinance = (force = false) =>
+  cachedFetch(
+    CACHE_KEYS.finance,
+    () => opsCall<{ entries: FinEntry[] }>({ action: "finance_list" }).then((r) => r.entries),
     { force },
   );
 

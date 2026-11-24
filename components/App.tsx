@@ -8,6 +8,7 @@ import { todayISO, type Contact, type Task } from "@/lib/ops";
 import { useMe } from "./AuthGate";
 import CatalogTab from "./catalog/CatalogTab";
 import DeliveryTab from "./delivery/DeliveryTab";
+import FinanceTab from "./finance/FinanceTab";
 import HomeTab from "./home/HomeTab";
 import ClientsTab from "./ClientsTab";
 import CrmTab from "./CrmTab";
@@ -42,12 +43,13 @@ const BASE_GROUPS = [
 const ADMIN_GROUP = {
   title: "Gestão",
   items: [
+    { id: "caixa", label: "Caixa", sub: "Entradas, saídas e fluxo de caixa da KRIVO" },
     { id: "catalogo", label: "Catálogo", sub: "Produtos, escopos e preços da KRIVO" },
     { id: "equipe", label: "Equipe", sub: "Sócios, acessos e redefinição de senha" },
   ],
 } as const;
 
-type TabId = "home" | "tarefas" | "crm" | "entrega" | "krivo" | "clientes" | "catalogo" | "equipe";
+type TabId = "home" | "tarefas" | "crm" | "entrega" | "krivo" | "clientes" | "caixa" | "catalogo" | "equipe";
 
 function TabIcon({ id }: { id: TabId }) {
   const props = {
@@ -74,6 +76,8 @@ function TabIcon({ id }: { id: TabId }) {
       return <svg {...props}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></svg>;
     case "clientes":
       return <svg {...props}><path d="M3 3v18h18" /><path d="M8 16v-5M13 16V7M18 16v-8" /></svg>;
+    case "caixa":
+      return <svg {...props}><rect x="2.5" y="6" width="19" height="13" rx="3" /><path d="M2.5 10h19" /><circle cx="16.5" cy="14.5" r="1.5" /></svg>;
     case "catalogo":
       return <svg {...props}><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" /></svg>;
     case "equipe":
@@ -113,7 +117,7 @@ export default function App() {
   const groups = isAdmin ? [...BASE_GROUPS, ADMIN_GROUP] : [...BASE_GROUPS];
   const tabs = groups.flatMap((g) => [...g.items]);
   const [tab, setTab] = useState<TabId>("home");
-  const [visited, setVisited] = useState<Record<TabId, boolean>>({ home: true, tarefas: false, crm: false, entrega: false, krivo: false, clientes: false, catalogo: false, equipe: false });
+  const [visited, setVisited] = useState<Record<TabId, boolean>>({ home: true, tarefas: false, crm: false, entrega: false, krivo: false, clientes: false, caixa: false, catalogo: false, equipe: false });
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const counts = useNavCounts();
 
@@ -264,6 +268,9 @@ export default function App() {
           <div role="tabpanel" id="panel-krivo" aria-labelledby="tab-krivo" hidden={tab !== "krivo"}>{visited.krivo && <KrivoTab />}</div>
           <div role="tabpanel" id="panel-clientes" aria-labelledby="tab-clientes" hidden={tab !== "clientes"}>{visited.clientes && <ClientsTab />}</div>
           {isAdmin && (
+            <div role="tabpanel" id="panel-caixa" aria-labelledby="tab-caixa" hidden={tab !== "caixa"}>{visited.caixa && <FinanceTab />}</div>
+          )}
+          {isAdmin && (
             <div role="tabpanel" id="panel-catalogo" aria-labelledby="tab-catalogo" hidden={tab !== "catalogo"}>{visited.catalogo && <CatalogTab />}</div>
           )}
           {isAdmin && (
@@ -276,7 +283,7 @@ export default function App() {
       <div
         role="tablist"
         aria-label="Seções"
-        className={`fixed inset-x-0 bottom-0 z-40 grid ${isAdmin ? "grid-cols-8" : "grid-cols-6"} border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden`}
+        className={`fixed inset-x-0 bottom-0 z-40 grid ${isAdmin ? "grid-cols-9" : "grid-cols-6"} border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden`}
       >
         {tabs.map((t, i) => {
           const active = tab === t.id;

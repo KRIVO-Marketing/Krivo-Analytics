@@ -687,6 +687,207 @@ async function catalogDelete(i: any) {
   return { ok: true };
 }
 
+// ---------- ações: fluxo de caixa (somente administradores: contém valores da empresa) ----------
+const FIN_KINDS = ["in", "out"];
+const FIN_STATUS = ["pending", "paid"];
+const FIN_CATEGORIES: Record<string, string[]> = {
+  in: ["mensalidade", "setup", "diagnostico", "outras_entradas"],
+  out: ["plataformas", "anuncios", "equipe", "impostos", "estrutura", "marketing", "outras_saidas"],
+};
+const FIN_MAX_REPEAT = 36;
+// Soma meses mantendo o dia; em meses mais curtos usa o último dia (31/jan + 1 mês = 28/fev).
+function addMonths(iso: string, n: number) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const total = m - 1 + n;
+  const yy = y + Math.floor(total / 12);
+  const mm = ((total % 12) + 12) % 12;
+  const last = new Date(Date.UTC(yy, mm + 1, 0)).getUTCDate();
+  return `${yy}-${String(mm + 1).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
+function finCategory(kind: string, v: unknown) {
+  const c = oneOf(v ?? (kind === "in" ? "outras_entradas" : "outras_saidas"), FIN_CATEGORIES[kind], "Categoria");
+  return c;
+}
+const FIN_BUCKET = "financeiro-anexos";
+const FIN_MAX_FILES = 10;
+const FIN_FILE_TYPES: Record<string, string> = {
+  ".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+const FIN_ATT_COLS = "id,entry_id,file_name,mime,size_bytes,created_at";
+async function withAttachments(rows: any[]) {
+  if (!rows.length) return [];
+  const ids = rows.map((r) => r.id);
+  const out: Record<string, any[]> = {};
+  // em blocos para não estourar o tamanho da URL da consulta
+  for (let k = 0; k < ids.length; k += 200) {
+    const { data, error } = await sb.from("finance_attachments").select(FIN_ATT_COLS).in("entry_id", ids.slice(k, k + 200)).order("created_at", { ascending: true });
+    if (error) throw dbErr("Erro ao ler os anexos.");
+    for (const a of data ?? []) (out[a.entry_id] ??= []).push(a);
+  }
+  return rows.map((r) => ({ ...r, attachments: out[r.id] ?? [] }));
+}
+async function financeList() {
+  const { data, error } = await sb.from("finance_entries").select("*").order("entry_date", { ascending: false }).order("created_at", { ascending: false }).limit(5000);
+  if (error) throw dbErr("Erro ao ler o fluxo de caixa.");
+  return { entries: await withAttachments(data ?? []) };
+}
+async function financeCreate(i: any, u: Member) {
+  const kind = oneOf(i.kind, FIN_KINDS, "Tipo");
+  const date = cleanDate(i.entry_date, "A data");
+  if (!date) throw bad("Informe a data do lançamento.");
+  const amount = cleanMoney(i.amount);
+  if (amount === null || amount <= 0) throw bad("Informe um valor maior que zero.");
+  const status = oneOf(i.status ?? "pending", FIN_STATUS, "Situação");
+  const repeat = i.repeat_months === undefined || i.repeat_months === null || i.repeat_months === "" ? 1 : Number(i.repeat_months);
+  if (!Number.isInteger(repeat) || repeat < 1 || repeat > FIN_MAX_REPEAT) throw bad(`A repetição deve ser de 1 a ${FIN_MAX_REPEAT} meses.`);
+  const base = {
+    kind,
+    description: str(i.description, "A descrição", 2, 120),
+    category: finCategory(kind, i.category),
+    counterparty: optStr(i.counterparty, "O nome", 80),
+    amount,
+    notes: optStr(i.notes, "A observação", 500),
+    created_by: u.id,
+    updated_by: u.id,
+  };
+  const series_id = repeat > 1 ? crypto.randomUUID() : null;
+  // Na série, só a primeira parcela pode nascer paga; as seguintes ficam pendentes.
+  const rows = Array.from({ length: repeat }, (_, n) => ({
+    ...base,
+    series_id,
+    entry_date: addMonths(date, n),
+    status: n === 0 ? status : "pending",
+    paid_at: n === 0 && status === "paid" ? new Date().toISOString() : null,
+  }));
+  const { data, error } = await sb.from("finance_entries").insert(rows).select();
+  if (error) throw dbErr("Erro ao salvar o lançamento.");
+  return { entries: (data ?? []).map((r) => ({ ...r, attachments: [] })) };
+}
+async function financeUpdate(i: any, u: Member) {
+  const id = uuid(i.id, "ID do lançamento");
+  const { data: cur, error: e0 } = await sb.from("finance_entries").select("kind,status").eq("id", id).maybeSingle();
+  if (e0) throw dbErr("Erro ao ler o lançamento.");
+  if (!cur) throw notFound("Lançamento não encontrado.");
+  const p: Record<string, unknown> = {};
+  const kind = i.kind !== undefined ? oneOf(i.kind, FIN_KINDS, "Tipo") : cur.kind;
+  if (i.kind !== undefined) p.kind = kind;
+  if (i.category !== undefined || i.kind !== undefined) p.category = finCategory(kind, i.category);
+  if (i.description !== undefined) p.description = str(i.description, "A descrição", 2, 120);
+  if (i.counterparty !== undefined) p.counterparty = optStr(i.counterparty, "O nome", 80);
+  if (i.notes !== undefined) p.notes = optStr(i.notes, "A observação", 500);
+  if (i.amount !== undefined) {
+    const a = cleanMoney(i.amount);
+    if (a === null || a <= 0) throw bad("Informe um valor maior que zero.");
+    p.amount = a;
+  }
+  if (i.entry_date !== undefined) {
+    const d = cleanDate(i.entry_date, "A data");
+    if (!d) throw bad("Informe a data do lançamento.");
+    p.entry_date = d;
+  }
+  if (i.status !== undefined) {
+    const s = oneOf(i.status, FIN_STATUS, "Situação");
+    p.status = s;
+    if (s !== cur.status) p.paid_at = s === "paid" ? new Date().toISOString() : null;
+  }
+  const { data, error } = await sb.from("finance_entries").update({ ...p, updated_by: u.id, updated_at: new Date().toISOString() }).eq("id", id).select().maybeSingle();
+  if (error) throw dbErr("Erro ao atualizar o lançamento.");
+  if (!data) throw notFound("Lançamento não encontrado.");
+  return { entry: (await withAttachments([data]))[0] };
+}
+// scope "one" apaga só este lançamento; "following" apaga este e os próximos da mesma série (assinatura recorrente).
+async function financeDelete(i: any) {
+  const id = uuid(i.id, "ID do lançamento");
+  const scope = oneOf(i.scope ?? "one", ["one", "following"], "Escopo");
+  const { data: cur, error: e0 } = await sb.from("finance_entries").select("series_id,entry_date").eq("id", id).maybeSingle();
+  if (e0) throw dbErr("Erro ao ler o lançamento.");
+  if (!cur) return { ids: [id] };
+  let q = sb.from("finance_entries").delete();
+  q = scope === "following" && cur.series_id ? q.eq("series_id", cur.series_id).gte("entry_date", cur.entry_date) : q.eq("id", id);
+  // guarda os caminhos dos anexos antes: as linhas somem em cascata, os arquivos do Storage precisam ser removidos à parte
+  let sel = sb.from("finance_entries").select("id");
+  sel = scope === "following" && cur.series_id ? sel.eq("series_id", cur.series_id).gte("entry_date", cur.entry_date) : sel.eq("id", id);
+  const { data: targets } = await sel;
+  const tids = (targets ?? []).map((r: { id: string }) => r.id);
+  const { data: files } = tids.length ? await sb.from("finance_attachments").select("storage_path").in("entry_id", tids) : { data: [] as { storage_path: string }[] };
+  const { data, error } = await q.select("id");
+  if (error) throw dbErr("Erro ao remover o lançamento.");
+  const paths = (files ?? []).map((f: { storage_path: string }) => f.storage_path);
+  if (paths.length) await sb.storage.from(FIN_BUCKET).remove(paths);
+  return { ids: (data ?? []).map((r: { id: string }) => r.id) };
+}
+
+// ---- anexos: 1) pede URL de envio, 2) o navegador envia direto ao Storage, 3) o servidor confere o conteúdo e registra ----
+function finExt(name: string) {
+  const ext = name.toLowerCase().slice(name.lastIndexOf("."));
+  if (!FIN_FILE_TYPES[ext]) throw bad("Tipo de arquivo não aceito. Use PDF, imagem (PNG, JPG, WEBP), Excel (.xlsx) ou Word (.docx).");
+  return ext;
+}
+function finMagicOk(ext: string, b: Uint8Array) {
+  const at = (i: number, ...v: number[]) => v.every((x, k) => b[i + k] === x);
+  if (ext === ".pdf") return at(0, 0x25, 0x50, 0x44, 0x46);
+  if (ext === ".png") return at(0, 0x89, 0x50, 0x4e, 0x47);
+  if (ext === ".jpg" || ext === ".jpeg") return at(0, 0xff, 0xd8);
+  if (ext === ".webp") return at(0, 0x52, 0x49, 0x46, 0x46) && at(8, 0x57, 0x45, 0x42, 0x50);
+  return at(0, 0x50, 0x4b); // xlsx / docx são ZIP
+}
+async function financeAttachUploadUrl(i: any) {
+  const entryId = uuid(i.entry_id, "ID do lançamento");
+  const name = str(i.file_name, "O nome do arquivo", 3, 120);
+  const ext = finExt(name);
+  const size = Number(i.size_bytes);
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_DOC_BYTES) throw bad("O arquivo deve ter no máximo 10 MB.");
+  const { data: e, error: e0 } = await sb.from("finance_entries").select("id").eq("id", entryId).maybeSingle();
+  if (e0) throw dbErr("Erro ao ler o lançamento.");
+  if (!e) throw notFound("Lançamento não encontrado.");
+  const { count } = await sb.from("finance_attachments").select("id", { count: "exact", head: true }).eq("entry_id", entryId);
+  if ((count ?? 0) >= FIN_MAX_FILES) throw bad(`Cada lançamento aceita até ${FIN_MAX_FILES} anexos.`);
+  const path = `${entryId}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${safeFileName(name)}`;
+  const { data, error } = await sb.storage.from(FIN_BUCKET).createSignedUploadUrl(path);
+  if (error || !data) throw dbErr("Não foi possível preparar o envio do arquivo.");
+  return { path, signed_url: data.signedUrl, mime: FIN_FILE_TYPES[ext] };
+}
+async function financeAttachConfirm(i: any, u: Member) {
+  const entryId = uuid(i.entry_id, "ID do lançamento");
+  const path = str(i.path, "O caminho", 3, 240);
+  if (!path.startsWith(`${entryId}/`) || path.includes("..")) throw bad("Caminho do arquivo inválido.");
+  const fileName = str(i.file_name, "O nome do arquivo", 3, 120).replace(/[\\/:*?"<>|]+/g, "-");
+  const ext = finExt(fileName);
+  const { data: blob, error } = await sb.storage.from(FIN_BUCKET).download(path);
+  if (error || !blob) throw bad("Arquivo enviado não encontrado. Tente enviar de novo.");
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  if (buf.byteLength > MAX_DOC_BYTES || !finMagicOk(ext, buf)) {
+    await sb.storage.from(FIN_BUCKET).remove([path]);
+    throw bad(buf.byteLength > MAX_DOC_BYTES ? "O arquivo deve ter no máximo 10 MB." : "O conteúdo do arquivo não corresponde ao tipo informado.");
+  }
+  const { data, error: insErr } = await sb.from("finance_attachments").insert({
+    entry_id: entryId, storage_path: path, file_name: fileName, mime: FIN_FILE_TYPES[ext], size_bytes: buf.byteLength, created_by: u.id,
+  }).select(FIN_ATT_COLS).single();
+  if (insErr) {
+    await sb.storage.from(FIN_BUCKET).remove([path]);
+    throw dbErr("Erro ao registrar o anexo.");
+  }
+  return { attachment: data };
+}
+async function financeAttachUrl(i: any) {
+  const id = uuid(i.id, "ID do anexo");
+  const { data, error } = await sb.from("finance_attachments").select("storage_path,file_name").eq("id", id).maybeSingle();
+  if (error) throw dbErr("Erro ao ler o anexo.");
+  if (!data) throw notFound("Anexo não encontrado.");
+  const signed = await sb.storage.from(FIN_BUCKET).createSignedUrl(data.storage_path, SIGNED_URL_SECONDS, { download: data.file_name });
+  if (signed.error || !signed.data?.signedUrl) throw new AppError(404, "arquivo_ausente", "O arquivo deste anexo não foi encontrado.");
+  return { url: signed.data.signedUrl, file_name: data.file_name, expires_in: SIGNED_URL_SECONDS };
+}
+async function financeAttachDelete(i: any) {
+  const id = uuid(i.id, "ID do anexo");
+  const { data, error } = await sb.from("finance_attachments").delete().eq("id", id).select("storage_path").maybeSingle();
+  if (error) throw dbErr("Erro ao remover o anexo.");
+  if (data?.storage_path) await sb.storage.from(FIN_BUCKET).remove([data.storage_path]);
+  return { ok: true };
+}
+
 // ---------- ações: entrega (checklist, modelos, mensagens e contrato) ----------
 // Escrita segue a regra das Tarefas: qualquer membro marca item, cria nota e gera contrato.
 // Modelo do checklist, arquivos, mensagens e exclusão de entrega: só administradores.
@@ -1207,6 +1408,12 @@ const WRITE = [
   "catalog_create",
   "catalog_update",
   "catalog_delete",
+  "finance_create",
+  "finance_update",
+  "finance_delete",
+  "finance_attach_upload_url",
+  "finance_attach_confirm",
+  "finance_attach_delete",
   "task_create",
   "task_update",
   "task_delete",
@@ -1220,7 +1427,7 @@ const WRITE = [
   "password_reset_complete",
 ];
 const READ = [
-  "me", "team", "team_list", "tasks_list", "contacts_list", "contact_get", "bootstrap", "catalog_list",
+  "me", "team", "team_list", "tasks_list", "contacts_list", "contact_get", "bootstrap", "catalog_list", "finance_list", "finance_attach_url",
   "contract_fields", "contract_history", "contract_url", "deliveries_list", "delivery_get", "delivery_templates_list",
   "docs_list", "doc_url", "messages_list",
 ];
@@ -1267,6 +1474,14 @@ Deno.serve(async (req) => {
       case "catalog_create": needAdmin(user); return json(await catalogCreate(input, user), 201);
       case "catalog_update": needAdmin(user); return json(await catalogUpdate(input, user));
       case "catalog_delete": needAdmin(user); return json(await catalogDelete(input));
+      case "finance_list": needAdmin(user); return json(await financeList());
+      case "finance_create": needAdmin(user); return json(await financeCreate(input, user), 201);
+      case "finance_update": needAdmin(user); return json(await financeUpdate(input, user));
+      case "finance_delete": needAdmin(user); return json(await financeDelete(input));
+      case "finance_attach_upload_url": needAdmin(user); return json(await financeAttachUploadUrl(input));
+      case "finance_attach_confirm": needAdmin(user); return json(await financeAttachConfirm(input, user), 201);
+      case "finance_attach_url": needAdmin(user); return json(await financeAttachUrl(input));
+      case "finance_attach_delete": needAdmin(user); return json(await financeAttachDelete(input));
       // entrega: leitura (qualquer membro)
       case "deliveries_list": return json(await deliveriesList());
       case "delivery_get": return json(await deliveryGet(input));
