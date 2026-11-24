@@ -6,6 +6,9 @@ type Entry<T> = {
 };
 
 const store = new Map<string, Entry<unknown>>();
+// Versão por chave: incrementa a cada escrita direta (mutação otimista) para descartar fetches antigos em voo.
+const versions = new Map<string, number>();
+const bump = (key: string) => versions.set(key, (versions.get(key) ?? 0) + 1);
 const listeners = new Map<string, Set<() => void>>();
 const DEFAULT_TTL_MS = 5 * 60_000;
 const STORAGE_PREFIX = "krivo_cache:";
@@ -79,7 +82,6 @@ export function getCached<T>(key: string): T | undefined {
   const entry = store.get(key) as Entry<T> | undefined;
   if (entry && entry.value !== undefined) {
     if (Date.now() <= entry.expiresAt) return entry.value;
-    store.delete(key);
   }
   const persisted = readStorage<T>(key);
   if (persisted?.value !== undefined) {
@@ -89,7 +91,14 @@ export function getCached<T>(key: string): T | undefined {
   return undefined;
 }
 
+// Lê o valor mesmo expirado (usado para mutações otimistas, que nunca devem partir de uma lista vazia).
+export function peekCached<T>(key: string): T | undefined {
+  const entry = store.get(key) as Entry<T> | undefined;
+  return entry?.value;
+}
+
 export function setCached<T>(key: string, value: T, ttlMs = DEFAULT_TTL_MS): T {
+  bump(key);
   const entry = { value, expiresAt: Date.now() + ttlMs };
   store.set(key, entry);
   writeStorage(key, entry);
@@ -128,8 +137,17 @@ export function cachedFetch<T>(
     return existing.promise;
   }
 
+  const startVersion = versions.get(key) ?? 0;
   const promise = fetcher()
     .then((value) => {
+      // Se houve mutação local durante a requisição, o resultado pode estar defasado: mantém o que está no cache.
+      if ((versions.get(key) ?? 0) !== startVersion) {
+        const cur = store.get(key) as Entry<T> | undefined;
+        if (cur?.value !== undefined) {
+          store.set(key, { value: cur.value, expiresAt: Date.now() + ttlMs });
+          return cur.value;
+        }
+      }
       const next = { value, expiresAt: Date.now() + ttlMs };
       store.set(key, next);
       writeStorage(key, next);

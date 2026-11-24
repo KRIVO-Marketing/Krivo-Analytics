@@ -1,7 +1,7 @@
 // Camada compartilhada de leitura e cache em memória para as abas do painel.
 import { ApiError, apiRead, opsCall } from "./api";
 import type { Me } from "./auth";
-import { cachedFetch, getCached, setCached } from "./cache";
+import { cachedFetch, getCached, peekCached, setCached } from "./cache";
 import type { CatalogItem, Contact, Interaction, Member, Task } from "./ops";
 import type { ContractFieldsResponse, DeliveryDetail, DeliveryDoc, DeliveryMessage, DeliverySummary, DeliveryTemplate } from "./delivery";
 import type { Goal, Info, Metrics, Property, RealtimeMetrics } from "./types";
@@ -120,12 +120,12 @@ export const fetchRealtime = (propertyId: string, signal?: AbortSignal) =>
   apiRead<RealtimeMetrics>({ action: "realtime", id: propertyId }, signal);
 
 export function updateTasksCache(updater: (prev: Task[]) => Task[]) {
-  const prev = getCached<Task[]>(CACHE_KEYS.tasks) ?? [];
+  const prev = peekCached<Task[]>(CACHE_KEYS.tasks) ?? [];
   return setCached(CACHE_KEYS.tasks, updater(prev));
 }
 
 export function updateContactsCache(updater: (prev: Contact[]) => Contact[]) {
-  const prev = getCached<Contact[]>(CACHE_KEYS.contacts) ?? [];
+  const prev = peekCached<Contact[]>(CACHE_KEYS.contacts) ?? [];
   return setCached(CACHE_KEYS.contacts, updater(prev));
 }
 
