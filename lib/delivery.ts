@@ -1,17 +1,32 @@
 // Tipos e rótulos da aba Entrega. Regras de negócio ficam na função ops-api; aqui só apresentação.
 import { todayISO } from "./ops";
 
-export const PRODUCTS = [
-  { code: "00", key: "diagnostico", name: "KRIVO Diagnóstico", short: "Diagnóstico" },
-  { code: "01", key: "social", name: "KRIVO Social", short: "Social" },
-  { code: "02", key: "local", name: "KRIVO Local", short: "Local" },
-  { code: "03", key: "site", name: "KRIVO Site", short: "Site" },
-  { code: "04", key: "atende", name: "KRIVO Atende", short: "Atende" },
-  { code: "05", key: "metodologia", name: "Metodologia KRIVO", short: "Metodologia" },
-] as const;
-export type ProductCode = (typeof PRODUCTS)[number]["code"];
-export const productByCode = (c: string | null | undefined) => PRODUCTS.find((p) => p.code === c);
-export const productByKey = (k: string) => PRODUCTS.find((p) => p.key === k);
+// Produtos da Entrega: vêm do catálogo (código, nome), então um produto novo aparece aqui sozinho.
+// A lista fixa abaixo é só o ponto de partida enquanto o catálogo não carrega.
+export type Product = { code: string; key: string; name: string; short: string };
+export const BUNDLE_CODE = "05"; // Metodologia KRIVO: pacote que aplica os itens de 00 a 04
+export const METODOLOGIA_CODES = ["00", "01", "02", "03", "04"];
+// chave usada pelo modelo de contrato (só existe para os produtos que têm contrato)
+const CONTRACT_KEYS: Record<string, string> = { "00": "diagnostico", "01": "social", "02": "local", "03": "site", "04": "atende", "05": "metodologia" };
+const toProduct = (code: string, name: string): Product => ({
+  code,
+  key: CONTRACT_KEYS[code] ?? code,
+  name,
+  short: name.replace(/^(KRIVO|Metodologia)\s+/i, "") || name,
+});
+const FALLBACK: Product[] = [
+  toProduct("00", "KRIVO Diagnóstico"), toProduct("01", "KRIVO Social"), toProduct("02", "KRIVO Local"),
+  toProduct("03", "KRIVO Site"), toProduct("04", "KRIVO Atende"), toProduct("05", "Metodologia KRIVO"),
+];
+export const PRODUCTS_CACHE_KEY = "products";
+let live: Product[] = FALLBACK;
+export const setProducts = (rows: { code: string | null; name: string }[]) => {
+  const list = rows.filter((r) => r.code).map((r) => toProduct(r.code as string, r.name));
+  if (list.length) live = list;
+};
+export const getProducts = () => live;
+export const productByCode = (c: string | null | undefined) => live.find((p) => p.code === c);
+export const productByKey = (k: string) => live.find((p) => p.key === k);
 
 export const DELIVERY_STATUS = [
   { id: "ativa", label: "Ativa", color: "#1a7f45" },

@@ -1,4 +1,5 @@
 "use client";
+import { useProducts } from "@/lib/useProducts";
 import { useEffect, useId, useState } from "react";
 import { fmtDateTime, isOverdue, messageKeysOf, messageShortLabel, productByCode, type DeliveryItem } from "@/lib/delivery";
 import { dueInfo, nameOf, type Member } from "@/lib/ops";
@@ -70,6 +71,7 @@ export function ChecklistPhase({ phase, title, items, defaultOpen, ...h }: { pha
 }
 
 function ItemRow({ it, team, docTitle, messageTitle, onUpdate, onDownload, onCopy, onContract, onTask, busyId }: { it: DeliveryItem } & Handlers) {
+  useProducts();
   const [more, setMore] = useState(false);
   const [note, setNote] = useState(it.note ?? "");
   useEffect(() => setNote(it.note ?? ""), [it.note]);

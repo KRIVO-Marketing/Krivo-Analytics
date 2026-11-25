@@ -1,7 +1,8 @@
 "use client";
+import { useProducts } from "@/lib/useProducts";
 import { useMemo, useState } from "react";
 import { opsCall } from "@/lib/api";
-import { PRODUCTS } from "@/lib/delivery";
+import { BUNDLE_CODE, METODOLOGIA_CODES } from "@/lib/delivery";
 import { nameOf, stageOf, todayISO, type Contact, type Member } from "@/lib/ops";
 import { useMe } from "../AuthGate";
 import { FormError } from "../opsui";
@@ -18,6 +19,7 @@ type Props = {
 
 export function StartDeliveryForm({ contacts, team, busyContactIds, initialContactId, onClose, onCreated }: Props) {
   const { me } = useMe();
+  const products = useProducts();
   const [contactId, setContactId] = useState(initialContactId ?? "");
   const [codes, setCodes] = useState<string[]>([]);
   const [owner, setOwner] = useState(() => contacts.find((c) => c.id === initialContactId)?.owner_id ?? me.id);
@@ -36,7 +38,7 @@ export function StartDeliveryForm({ contacts, team, busyContactIds, initialConta
   const closed = options.filter((c) => c.stage === "fechado");
   const others = options.filter((c) => c.stage !== "fechado");
   const picked = contacts.find((c) => c.id === contactId);
-  const metodologia = codes.includes("05");
+  const metodologia = codes.includes(BUNDLE_CODE);
 
   const toggle = (code: string) => setCodes((cur) => (cur.includes(code) ? cur.filter((c) => c !== code) : [...cur, code]));
 
@@ -92,9 +94,9 @@ export function StartDeliveryForm({ contacts, team, busyContactIds, initialConta
         <fieldset>
           <legend className="label">Produtos contratados</legend>
           <div className="grid gap-2 sm:grid-cols-2">
-            {PRODUCTS.map((p) => {
+            {products.map((p) => {
               const on = codes.includes(p.code);
-              const implied = metodologia && p.code !== "05";
+              const implied = metodologia && METODOLOGIA_CODES.includes(p.code);
               return (
                 <label key={p.code} className={`btn justify-start ${on ? "btn-primary" : ""} ${implied && !on ? "opacity-60" : ""}`}>
                   <input type="checkbox" className="sr-only" checked={on} onChange={() => toggle(p.code)} />

@@ -4,6 +4,7 @@ import type { Me } from "./auth";
 import { cachedFetch, getCached, peekCached, setCached } from "./cache";
 import type { FinEntry } from "./finance";
 import type { CatalogItem, Contact, Interaction, Member, Task } from "./ops";
+import { PRODUCTS_CACHE_KEY, setProducts } from "./delivery";
 import type { ContractFieldsResponse, DeliveryDetail, DeliveryDoc, DeliveryMessage, DeliverySummary, DeliveryTemplate } from "./delivery";
 import type { Goal, Info, Metrics, Property, RealtimeMetrics } from "./types";
 
@@ -36,6 +37,13 @@ export const CACHE_KEYS = {
 } as const;
 
 // ---------- Entrega ----------
+export const fetchProducts = (force = false) =>
+  cachedFetch(
+    PRODUCTS_CACHE_KEY,
+    () => opsCall<{ products: { code: string | null; name: string }[] }>({ action: "products_list" }).then((r) => { setProducts(r.products); return r.products; }),
+    { force, ttlMs: 5 * 60_000 },
+  );
+
 export const fetchDeliveries = (force = false) =>
   cachedFetch(CACHE_KEYS.deliveries, () => opsCall<{ deliveries: DeliverySummary[] }>({ action: "deliveries_list" }).then((r) => r.deliveries), { force, ttlMs: 2 * 60_000 });
 export const fetchDeliveryDetail = (id: string, force = false) =>

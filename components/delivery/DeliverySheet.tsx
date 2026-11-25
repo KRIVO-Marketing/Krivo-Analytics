@@ -1,4 +1,5 @@
 "use client";
+import { useProducts } from "@/lib/useProducts";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { opsCall } from "@/lib/api";
 import { getCached, invalidateCache, setCached } from "@/lib/cache";
@@ -19,6 +20,7 @@ type Props = { id: string; team: Member[]; onClose: () => void; onChanged: () =>
 
 export function DeliverySheet({ id, team, onClose, onChanged, onDeleted }: Props) {
   const { me } = useMe();
+  useProducts();
   const isAdmin = me.role === "admin";
   const [data, setData] = useState<DeliveryDetail | null>(() => getCached<DeliveryDetail>(CACHE_KEYS.deliveryDetail(id)) ?? null);
   const [docs, setDocs] = useState<DeliveryDoc[]>(() => getCached<DeliveryDoc[]>(CACHE_KEYS.deliveryDocs) ?? []);

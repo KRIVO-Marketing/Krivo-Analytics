@@ -902,8 +902,19 @@ async function financeAttachDelete(i: any) {
 const SPEC = CONTRACT_SPEC as unknown as Spec;
 const BUCKET = "modelos-entrega";
 const DELIVERY_STATUS = ["ativa", "pausada", "concluida"];
-const PRODUCT_CODES = ["00", "01", "02", "03", "04", "05"];
-const TEMPLATE_CODES = ["00", "01", "02", "03", "04"];
+// Produtos válidos vêm do catálogo (catalog_items.kind = 'product' com código). "05" é a Metodologia (pacote): não tem itens próprios no modelo.
+const BUNDLE_CODE = "05";
+async function productCodes() {
+  const { data, error } = await sb.from("catalog_items").select("code").eq("kind", "product").not("code", "is", null).limit(100);
+  if (error) throw dbErr("Erro ao ler os produtos do catálogo.");
+  const codes = (data ?? []).map((r: any) => String(r.code).trim()).filter(Boolean);
+  return { all: [...new Set(codes)], template: [...new Set(codes)].filter((c) => c !== BUNDLE_CODE) };
+}
+async function productsList() {
+  const { data, error } = await sb.from("catalog_items").select("code,name,tagline").eq("kind", "product").not("code", "is", null).order("position").order("created_at").limit(100);
+  if (error) throw dbErr("Erro ao ler os produtos do catálogo.");
+  return { products: data };
+}
 const METODOLOGIA_CODES = ["00", "01", "02", "03", "04"];
 const SLUG = /^[a-z0-9-]{2,60}$/;
 const MSG_KEY = /^[a-z0-9_]{2,40}$/;
@@ -921,10 +932,11 @@ const templateKeys = (t: { message_keys?: string[] | null; message_key?: string 
   t.message_keys?.length ? t.message_keys : t.message_key ? [t.message_key] : [];
 const notFound = (m: string) => new AppError(404, "nao_encontrado", m);
 
-function cleanCodes(v: unknown) {
-  if (!Array.isArray(v) || !v.length || v.length > 6) throw bad("Escolha pelo menos 1 produto.");
+async function cleanCodes(v: unknown) {
+  if (!Array.isArray(v) || !v.length || v.length > 30) throw bad("Escolha pelo menos 1 produto.");
+  const valid = (await productCodes()).all;
   const out = new Set<string>();
-  for (const c of v) out.add(oneOf(c, PRODUCT_CODES, "Produto"));
+  for (const c of v) out.add(oneOf(c, valid, "Produto"));
   return [...out].sort();
 }
 // Metodologia (05) aplica os itens de Diagnóstico, Social, Local, Site e Atende
@@ -1030,7 +1042,7 @@ async function deliveryGet(i: any) {
 async function deliveryCreate(i: any, u: Member) {
   const contact_id = await checkContact(i.contact_id);
   if (!contact_id) throw bad("Escolha o cliente.");
-  const codes = cleanCodes(i.product_codes);
+  const codes = await cleanCodes(i.product_codes);
   const owner_id = await checkAssignee(i.owner_id);
   const started_at = cleanDate(i.started_at, "A data de início") ?? todayIso();
   const { data: contact } = await sb.from("crm_contacts").select("name,company").eq("id", contact_id).maybeSingle();
@@ -1040,7 +1052,8 @@ async function deliveryCreate(i: any, u: Member) {
     ? str(i.title, "O título", 2, 120)
     : (contact?.company || contact?.name || "Entrega").slice(0, 120);
 
-  const tplCodes = expandCodes(codes).filter((c) => TEMPLATE_CODES.includes(c));
+  const templateCodes = (await productCodes()).template;
+  const tplCodes = expandCodes(codes).filter((c) => templateCodes.includes(c));
   const { data: tpls, error: tErr } = await sb.from("delivery_templates").select("*").order("phase").order("position");
   if (tErr) throw dbErr("Erro ao ler o modelo do checklist.");
   const chosen = (tpls ?? []).filter((t: any) => t.product_code === null || tplCodes.includes(t.product_code));
@@ -1179,7 +1192,7 @@ async function templateFields(i: any, partial: boolean) {
   if (has("title")) p.title = str(i.title, "O título", 2, 300);
   if (has("description")) p.description = optStr(i.description, "A descrição", 1000);
   if (has("owner_hint")) p.owner_hint = optStr(i.owner_hint, "O responsável sugerido", 40);
-  if (has("product_code")) p.product_code = i.product_code === null || i.product_code === "" || i.product_code === undefined ? null : oneOf(i.product_code, TEMPLATE_CODES, "Produto");
+  if (has("product_code")) p.product_code = i.product_code === null || i.product_code === "" || i.product_code === undefined ? null : oneOf(i.product_code, (await productCodes()).template, "Produto");
   if (has("due_offset_days")) {
     if (i.due_offset_days === null || i.due_offset_days === "" || i.due_offset_days === undefined) p.due_offset_days = null;
     else {
@@ -1435,7 +1448,7 @@ const WRITE = [
   "password_reset_complete",
 ];
 const READ = [
-  "me", "team", "team_list", "tasks_list", "contacts_list", "contact_get", "bootstrap", "catalog_list", "finance_list", "finance_attach_url",
+  "me", "team", "team_list", "tasks_list", "contacts_list", "contact_get", "bootstrap", "catalog_list", "products_list", "finance_list", "finance_attach_url",
   "contract_fields", "contract_history", "contract_url", "deliveries_list", "delivery_get", "delivery_templates_list",
   "docs_list", "doc_url", "messages_list",
 ];
@@ -1478,6 +1491,7 @@ Deno.serve(async (req) => {
       case "contact_update": return json(await contactUpdate(input, user));
       case "contact_delete": needAdmin(user); return json(await contactDelete(input));
       case "interaction_add": return json(await interactionAdd(input, user), 201);
+      case "products_list": return json(await productsList());
       case "catalog_list": needAdmin(user); return json(await catalogList());
       case "catalog_create": needAdmin(user); return json(await catalogCreate(input, user), 201);
       case "catalog_update": needAdmin(user); return json(await catalogUpdate(input, user));

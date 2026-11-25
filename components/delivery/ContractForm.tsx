@@ -1,4 +1,5 @@
 "use client";
+import { useProducts } from "@/lib/useProducts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, opsCall } from "@/lib/api";
 import { fetchContractFields } from "@/lib/data";
@@ -40,6 +41,7 @@ type Props = {
 };
 
 export function ContractForm({ deliveryId, saved, prefill, onClose, onSaved, onGenerated }: Props) {
+  useProducts();
   const [spec, setSpec] = useState<Spec | null>(null);
   const [data, setData] = useState<Data>({});
   const [loadErr, setLoadErr] = useState<string | null>(null);

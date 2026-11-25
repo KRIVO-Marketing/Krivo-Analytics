@@ -1,9 +1,11 @@
 "use client";
+import { useProducts } from "@/lib/useProducts";
 import { daysUntil, idleDays, isIdle, productByCode, statusOf, termEnd, type DeliverySummary } from "@/lib/delivery";
 import { nameOf, type Member } from "@/lib/ops";
 import { Avatar, Pill } from "../opsui";
 
 export function ProductChips({ codes }: { codes: string[] }) {
+  useProducts();
   return (
     <div className="flex flex-wrap gap-1.5">
       {codes.map((c) => (

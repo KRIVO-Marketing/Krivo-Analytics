@@ -1,7 +1,8 @@
 "use client";
+import { useProducts } from "@/lib/useProducts";
 import { useMemo, useState } from "react";
 import { opsCall } from "@/lib/api";
-import { messageKeysOf, PRODUCTS, productByCode, type DeliveryDoc, type DeliveryMessage, type DeliveryTemplate } from "@/lib/delivery";
+import { BUNDLE_CODE, messageKeysOf, productByCode, type DeliveryDoc, type DeliveryMessage, type DeliveryTemplate } from "@/lib/delivery";
 import { FormError } from "../opsui";
 import { Modal } from "../ui";
 
@@ -76,6 +77,7 @@ function TemplateForm({ t, phases, docs, messages, onClose, onSaved }: {
   t: DeliveryTemplate | null; phases: { n: number; title: string }[]; docs: DeliveryDoc[]; messages: DeliveryMessage[];
   onClose: () => void; onSaved: (t: DeliveryTemplate | null, removedId?: string) => void;
 }) {
+  const products = useProducts();
   const [phase, setPhase] = useState(String(t?.phase ?? phases[0]?.n ?? 1));
   const [phaseTitle, setPhaseTitle] = useState(t?.phase_title ?? phases[0]?.title ?? "");
   const [title, setTitle] = useState(t?.title ?? "");
@@ -137,7 +139,7 @@ function TemplateForm({ t, phases, docs, messages, onClose, onSaved }: {
             <label className="label" htmlFor="tp-prod">Produto</label>
             <select id="tp-prod" className="field" value={product} onChange={(e) => setProduct(e.target.value)}>
               <option value="">Toda entrega</option>
-              {PRODUCTS.filter((p) => p.code !== "05").map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
+              {products.filter((p) => p.code !== BUNDLE_CODE).map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}
             </select>
           </div>
           <div><label className="label" htmlFor="tp-owner">Responsável sugerido</label><input id="tp-owner" className="field" maxLength={40} placeholder="Sócio responsável" value={owner} onChange={(e) => setOwner(e.target.value)} /></div>
