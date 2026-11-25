@@ -60,6 +60,7 @@ export default function FinanceTab() {
   const [del, setDel] = useState<FinEntry | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const [movedTo, setMovedTo] = useState<string | null>(null);
   const today = todayISO();
 
   const load = useCallback(async (force = false) => {
@@ -149,6 +150,15 @@ export default function FinanceTab() {
   return (
     <div className="space-y-6">
       {error && <ErrorBox message={error} onRetry={() => load(true)} />}
+      {movedTo && (
+        <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-2.5 text-sm text-ink">
+          <span>Lançamento salvo em <strong>{monthLong(movedTo)}</strong>.</span>
+          <span className="flex gap-2">
+            <button type="button" className="btn" onClick={() => { setMonth(movedTo); setMovedTo(null); }}>Ver esse mês</button>
+            <button type="button" className="btn" onClick={() => setMovedTo(null)} aria-label="Fechar aviso">×</button>
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
@@ -293,7 +303,9 @@ export default function FinanceTab() {
           onSaved={(list) => {
             upsert(list);
             setForm(null);
-            if (!form.entry && list[0]) setMonth(monthOf(list[0].entry_date));
+            // Não troca de mês sozinho: avisa quando o lançamento caiu em outro mês.
+            const other = list.find((x) => monthOf(x.entry_date) !== month);
+            setMovedTo(!form.entry && other ? monthOf(other.entry_date) : null);
           }}
         />
       )}
