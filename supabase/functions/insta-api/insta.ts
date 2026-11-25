@@ -315,20 +315,39 @@ const ASSET_SPEC: Record<AssetGroup, { kind: AssetKind; tokens: number; ask: str
   },
 };
 
-export async function generateAssets(group: AssetGroup, p: InstaProfile, m: InstaMetrics, ctx: AnalysisCtx, diagnosis: string): Promise<{ kind: AssetKind; payloads: any[] }> {
-  const spec = ASSET_SPEC[group];
+// O plano e os Reels saem em partes pequenas: uma chamada gigante pode ser cortada no meio e deixar semanas faltando.
+export const PLAN_PARTS: [number, number][] = [[1, 5], [6, 9], [10, 13]];
+export const REEL_PARTS = 2;
+const FUNNEL = "Arco do funil das 13 semanas: semanas 1 a 3 dores do público; 4 a 6 autoridade; 7 a 9 o produto/serviço; 10 e 11 provas e casos reais; 12 oferta; 13 chamada final.";
+
+export async function generateAssets(group: AssetGroup, p: InstaProfile, m: InstaMetrics, ctx: AnalysisCtx, diagnosis: string, part?: number, prior = ""): Promise<{ kind: AssetKind; payloads: any[] }> {
+  let spec = ASSET_SPEC[group];
+  let first = 1, last = 13;
+  if (group === "plan" && part) {
+    [first, last] = PLAN_PARTS[part - 1];
+    const n = last - first + 1;
+    spec = { ...spec, tokens: 4500, ask: `Monte as semanas ${first} a ${last} (${n} semanas) de um plano de conteúdo de 13 semanas, com EXATAMENTE 3 posts por semana (${n * 3} posts no total). ${FUNNEL} Cada semana tem um tema e um objetivo. Alterne os formatos conforme o que já funciona neste perfil (priorize Reels para alcance e carrossel para salvamentos). Use dias e horários fixos. Não invente casos de cliente: onde a semana pedir prova, proponha o roteiro para a equipe gravar com um cliente real, sem citar nome nem número.${prior ? ` Semanas já feitas (não repita os temas): ${prior}` : ""} Use "week" com o número real da semana (${first} a ${last}).` };
+  }
+  if (group === "reels" && part) {
+    spec = { ...spec, tokens: 4500, ask: `Escreva 10 Reels prontos para gravar (parte ${part} de ${REEL_PARTS} de uma lista de 20), variados (dor, tutorial, bastidor, mito x verdade, antes e depois, pergunta do público). Cada um com gancho visual nos 3 primeiros segundos, roteiro em 3 cenas curtas, e um CTA com palavra-chave para comentar. Nada de nomes de clientes nem números inventados.${prior ? ` Já escritos (não repita): ${prior}` : ""}` };
+  }
   const system = `${BASE_RULES}\n\nTarefa: ${spec.ask}\nFormato exato: ${spec.shape}`;
   const user = `${dataBlock(p, m, ctx)}\n\nDiagnóstico já feito para este perfil (confiável): ${diagnosis}`;
   const j = await groqJson(system, user, spec.tokens, (x) => {
     const arr = group === "plan" ? x?.weeks : x?.items;
-    if (!Array.isArray(arr) || arr.length < (group === "plan" ? 8 : 3)) throw new Error("itens");
+    if (group === "plan" && part) {
+      const need = last - first + 1;
+      if (!Array.isArray(arr) || arr.length < need || arr.slice(0, need).some((w: any) => !Array.isArray(w?.posts) || w.posts.length < 3)) throw new Error("semanas_incompletas");
+    } else if (!Array.isArray(arr) || arr.length < (group === "plan" ? 8 : group === "reels" && part ? 8 : 3)) throw new Error("itens");
   }, "low");
   if (group === "plan") {
     const payloads: any[] = [];
-    for (const w of (j.weeks as any[]).slice(0, 13)) {
+    const weeks = (j.weeks as any[]).slice(0, last - first + 1);
+    for (const [wi, w] of weeks.entries()) {
+      const wn = part ? first + wi : Number(w?.week) || wi + 1;
       for (const [i, x] of (Array.isArray(w?.posts) ? w.posts : []).slice(0, 4).entries()) {
         payloads.push({
-          week: Number(w?.week) || payloads.length, theme: strOf(w?.theme, 120), goal: strOf(w?.goal, 300), slot: i + 1,
+          week: wn, theme: strOf(w?.theme, 120), goal: strOf(w?.goal, 300), slot: i + 1,
           day: strOf(x?.day, 20), time: strOf(x?.time, 10), format: strOf(x?.format, 30), title: strOf(x?.title, 140),
           hook: strOf(x?.hook, 220), script: strOf(x?.script, 900), caption: strOf(x?.caption, 700), hashtags: tags(x?.hashtags),
         });

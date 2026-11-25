@@ -1,5 +1,5 @@
 import { ApiError, diagCall } from "../api";
-import { instaAnalyze, instaCompare, instaGenerate } from "../insta/types";
+import { GROUP_PARTS, instaAnalyze, instaCompare, instaGenerate } from "../insta/types";
 import type { AnalysisResult, Dimension } from "../insta/types";
 import type { InstaMetrics } from "../insta/metrics";
 
@@ -98,11 +98,16 @@ export async function runDiagnostic(input: RunInput, step: (label: string) => vo
     const analysisId = igAnalysisId;
     if (analysisId) {
       const groups: ["plan" | "bios" | "reels" | "messages", string][] = [
-        ["plan", "Plano de conteúdo de 13 semanas…"], ["bios", "Bios prontas…"], ["reels", "Reels prontos para gravar…"], ["messages", "Mensagens que viram venda…"],
+        ["plan", "Plano de conteúdo de 13 semanas"], ["reels", "Reels prontos para gravar"], ["bios", "Bios prontas"], ["messages", "Mensagens que viram venda"],
       ];
-      for (const [g, label] of groups) {
-        step(label);
-        try { await withAiRetry(() => instaGenerate(analysisId, g), step, label); } catch (e) { warnings.push(`${label.replace("…", "")}: ${(e as Error).message}`); }
+      for (const [g, name] of groups) {
+        const total = GROUP_PARTS[g];
+        for (let part = 1; part <= total; part++) {
+          const label = total > 1 ? `${name} (parte ${part} de ${total})…` : `${name}…`;
+          step(label);
+          try { await withAiRetry(() => instaGenerate(analysisId, g, total > 1 ? part : undefined), step, label); }
+          catch (e) { warnings.push(`${name}${total > 1 ? ` (parte ${part})` : ""}: ${(e as Error).message}`); break; }
+        }
       }
       for (const c of input.competitors.slice(0, 2)) {
         const label = `Comparando com @${c.replace(/^@/, "")}…`;

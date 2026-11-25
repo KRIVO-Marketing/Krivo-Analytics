@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchContacts } from "@/lib/data";
 import {
-  DIM_ORDER, GOALS, PAINS, instaAnalyze, instaCompare, instaDelete, instaGenerate, instaGet, instaList, scoreTone,
+  DIM_ORDER, GOALS, PAINS, instaAnalyze, instaCompare, instaDelete, instaGenerateAll, instaGet, instaList, scoreTone,
   type Asset, type AnalysisDetail, type InstaListItem,
 } from "@/lib/insta/types";
 import type { Contact } from "@/lib/ops";
@@ -88,7 +88,7 @@ function AssetList({ title, kind, assets, busy, onGenerate }: {
         <h3 className="text-base font-semibold text-ink">{title}{items.length ? ` · ${items.length}` : ""}</h3>
         <button type="button" className="btn" onClick={onGenerate} disabled={busy}>{busy ? "Gerando…" : items.length ? "Gerar de novo" : "Gerar"}</button>
       </div>
-      {busy && <AiLoader compact title="A IA está escrevendo… (até 1 min)" />}
+      {busy && <AiLoader compact title="A IA está escrevendo… (planos e Reels levam alguns minutos)" />}
       {!items.length && !busy && <p className="mt-2 text-sm text-mute">Ainda não gerado. Clique em Gerar para a IA montar com base no diagnóstico.</p>}
       {kind === "plan_post"
         ? weeks.map((w) => {
@@ -119,8 +119,9 @@ function Detail({ detail, onBack, onChange, onDeleted }: { detail: AnalysisDetai
   const generate = async (group: "plan" | "bios" | "reels" | "messages") => {
     setBusy(group); setErr(null);
     try {
-      const res = await instaGenerate(a.id, group);
-      onChange({ ...detail, assets: [...detail.assets.filter((x) => x.kind !== res.kind), ...res.assets] });
+      await instaGenerateAll(a.id, group);
+      const fresh = await instaGet(a.id); // o servidor devolve só a última parte: recarrega a lista completa
+      onChange({ ...detail, assets: fresh.assets });
     } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
   };
 

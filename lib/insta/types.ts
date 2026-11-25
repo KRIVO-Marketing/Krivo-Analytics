@@ -44,8 +44,20 @@ export const instaList = () => instaCall<{ profiles: InstaListItem[] }>({ action
 export const instaGet = (analysis_id: string) => instaCall<AnalysisDetail>({ action: "insta_get", analysis_id });
 export const instaAnalyze = (body: { username: string; contact_id?: string | null; is_internal?: boolean; goal?: string | null; pain?: string | null }) =>
   instaCall<AnalysisDetail>({ action: "insta_analyze", ...body });
-export const instaGenerate = (analysis_id: string, group: "plan" | "bios" | "reels" | "messages") =>
-  instaCall<{ kind: AssetKind; assets: Asset[] }>({ action: "insta_generate_assets", analysis_id, group });
+export type AssetGroupKey = "plan" | "bios" | "reels" | "messages";
+export const instaGenerate = (analysis_id: string, group: AssetGroupKey, part?: number) =>
+  instaCall<{ kind: AssetKind; assets: Asset[] }>({ action: "insta_generate_assets", analysis_id, group, ...(part ? { part } : {}) });
+// Plano (13 semanas) em 3 partes e Reels (20) em 2: cada parte cabe no tempo e no limite da IA, e a lista sai sempre completa.
+export const GROUP_PARTS: Record<AssetGroupKey, number> = { plan: 3, reels: 2, bios: 1, messages: 1 };
+export async function instaGenerateAll(analysis_id: string, group: AssetGroupKey, onPart?: (part: number, total: number) => void) {
+  const total = GROUP_PARTS[group];
+  let last: { kind: AssetKind; assets: Asset[] } | null = null;
+  for (let part = 1; part <= total; part++) {
+    onPart?.(part, total);
+    last = await instaGenerate(analysis_id, group, total > 1 ? part : undefined);
+  }
+  return last as { kind: AssetKind; assets: Asset[] };
+}
 export const instaCompare = (analysis_id: string, username: string) =>
   instaCall<{ comparison: Comparison }>({ action: "insta_compare", analysis_id, username });
 export const instaAssetStatus = (id: string, status: AssetStatus) => instaCall<{ asset: Asset }>({ action: "insta_asset_update", id, status });

@@ -4,7 +4,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from "npm:jose@5";
 import {
-  ASSET_GROUPS, collectProfile, compareProfiles, compareStats, computeMetrics, generateAssets, InstaError, normalizeUsername,
+  ASSET_GROUPS, PLAN_PARTS, REEL_PARTS, collectProfile, compareProfiles, compareStats, computeMetrics, generateAssets, InstaError, normalizeUsername,
   RUBRIC_VERSION, scoreProfile, type AnalysisCtx, type AssetGroup, type InstaMetrics, type InstaProfile,
 } from "./insta.ts";
 
@@ -231,17 +231,38 @@ async function instaLoadForAssets(analysisId: string) {
 async function instaGenerateAssets(i: any, u: Member) {
   const id = uuid(i.analysis_id, "ID da análise");
   const group = oneOf(i.group, [...ASSET_GROUPS], "Tipo de material") as AssetGroup;
+  // part (opcional): o plano sai em 3 partes e os Reels em 2. A parte 1 substitui o que existia; as demais acrescentam.
+  let part: number | undefined;
+  if (i.part !== undefined && i.part !== null) {
+    const max = group === "plan" ? PLAN_PARTS.length : group === "reels" ? REEL_PARTS : 0;
+    part = Number(i.part);
+    if (!max || !Number.isInteger(part) || part < 1 || part > max) throw bad("Parte inválida.");
+  }
   await rateLimit(`insta-as:${u.id}`, INSTA_LIMIT_HOUR);
   const { analysis, profile, collected, metrics } = await instaLoadForAssets(id);
   const r = analysis.result ?? {};
   const diagnosis = `${r.summary ?? ""} Prioridades: ${(r.recommendations ?? []).map((x: any) => x.title).join("; ")}`;
-  const gen = await generateAssets(group, collected, metrics, await instaContext(profile), diagnosis);
+  const kindOf = group === "plan" ? "plan_post" : group === "reels" ? "reel" : group === "bios" ? "bio" : "sales_message";
+  const { data: existing } = await sb.from("insta_assets").select("payload,position").eq("analysis_id", id).eq("kind", kindOf).order("position").limit(500);
+  const keep = part && part > 1 ? existing ?? [] : [];
+  let prior = "";
+  if (keep.length) {
+    if (group === "plan") {
+      const seen = new Map<number, string>();
+      for (const a of keep) seen.set(a.payload.week, a.payload.theme);
+      prior = [...seen].map(([w, t]) => `semana ${w}: ${t}`).join("; ");
+    } else prior = keep.map((a: any) => a.payload.title).join("; ");
+  }
+  const gen = await generateAssets(group, collected, metrics, await instaContext(profile), diagnosis, part, prior);
   if (!gen.payloads.length) throw new AppError(502, "ia_vazia", "A IA não gerou itens utilizáveis. Tente de novo.");
-  const del = await sb.from("insta_assets").delete().eq("analysis_id", id).eq("kind", gen.kind);
-  if (del.error) throw dbErr("Erro ao substituir os materiais.");
-  const ins = await sb.from("insta_assets").insert(gen.payloads.map((payload, position) => ({ analysis_id: id, kind: gen.kind, position, payload }))).select();
+  if (!keep.length) {
+    const del = await sb.from("insta_assets").delete().eq("analysis_id", id).eq("kind", gen.kind);
+    if (del.error) throw dbErr("Erro ao substituir os materiais.");
+  }
+  const offset = keep.length;
+  const ins = await sb.from("insta_assets").insert(gen.payloads.map((payload, position) => ({ analysis_id: id, kind: gen.kind, position: offset + position, payload }))).select();
   if (ins.error) throw dbErr("Erro ao salvar os materiais.");
-  return { kind: gen.kind, assets: ins.data ?? [] };
+  return { kind: gen.kind, assets: ins.data ?? [], part: part ?? null };
 }
 async function instaCompare(i: any, u: Member) {
   const id = uuid(i.analysis_id, "ID da análise");

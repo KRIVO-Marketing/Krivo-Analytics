@@ -16,9 +16,9 @@ function DiagProgress({ step, hasInsta, hasGoogle, tier, nComp }: { step: string
   const list = [
     hasInsta && { key: "Instagram…", label: "Analisando o Instagram" },
     hasGoogle && { key: "Google Meu Negócio", label: "Analisando o Google Meu Negócio e as avaliações" },
-    full && hasInsta && { key: "Plano de conteúdo", label: "Plano de conteúdo de 13 semanas" },
+    full && hasInsta && { key: "Plano de conteúdo", label: "Plano de conteúdo de 13 semanas (39 posts)" },
+    full && hasInsta && { key: "Reels", label: "Reels prontos para gravar (20)" },
     full && hasInsta && { key: "Bios prontas", label: "Bios prontas" },
-    full && hasInsta && { key: "Reels", label: "Reels prontos para gravar" },
     full && hasInsta && { key: "Mensagens", label: "Mensagens que viram venda" },
     full && hasInsta && nComp > 0 && { key: "Comparando", label: "Comparação com concorrentes" },
     full && hasGoogle && { key: "pacote do Google", label: "Ideias de posts e pacote do Google" },
