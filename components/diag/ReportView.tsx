@@ -107,7 +107,7 @@ export default function ReportView({ data, onClose }: { data: DiagFull; onClose:
   const nPrio = ++n;
   const toc = [
     ["resumo", "Resumo e nota por pilar"], ...(insta ? [["pilar-instagram", "Instagram"]] : []), ...(g ? [["pilar-google", "Google Meu Negócio"]] : []),
-    ["prioridades", "O que fazer agora"], ["proximo", "Próximo passo"],
+    ["prioridades", "O que fazer agora"],
   ];
 
   return createPortal(
@@ -191,12 +191,6 @@ export default function ReportView({ data, onClose }: { data: DiagFull; onClose:
               <p className="rpt-muted"><b>Impacto esperado:</b> {p.impact}</p>
             </div>
           ))}
-          <div className="rpt-panel rpt-next" id="proximo">
-            <p className="rpt-label">Próximo passo</p>
-            <h3 className="rpt-h3" style={{ margin: "2px 0 6px" }}>{rep.product.name}</h3>
-            <p className="rpt-p">{rep.product.why}</p>
-            <p className="rpt-muted">O diagnóstico aponta o que corrigir. A execução é com o KRIVO: fale com a gente para montar o plano.</p>
-          </div>
           <p className="rpt-note">Base da análise: dados públicos do Instagram (até 12 posts do feed) e da ficha do Google (avaliações mais recentes e respostas do dono) no momento da análise, em {when}. Stories, visualizações de Reels, salvamentos e compartilhamentos não são acessíveis e não entram na nota.</p>
         </section>
       </article>
