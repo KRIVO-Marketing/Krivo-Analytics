@@ -38,7 +38,7 @@ export function parseGoogleInput(v: unknown): { kind: "url" | "search"; value: s
     let u: URL;
     try { u = new URL(s); } catch { throw new GbpError(400, "validacao", "Link do Google inválido."); }
     const h = u.hostname.toLowerCase();
-    const ok = /(^|\.)google\.[a-z.]+$/.test(h) || h === "maps.app.goo.gl" || h === "goo.gl" || h === "g.page" || h === "share.google";
+    const ok = /(^|\.)google\.(com(\.[a-z]{2})?|[a-z]{2})$/.test(h) || h === "maps.app.goo.gl" || h === "goo.gl" || h === "g.page" || h === "share.google";
     if (!ok) throw new GbpError(400, "validacao", "Use um link do Google Maps (ou o nome da empresa com a cidade).");
     return { kind: "url", value: u.toString() };
   }
@@ -53,7 +53,7 @@ export function mapPlace(item: any): GbpPlace {
   const reviews: GbpReview[] = (Array.isArray(item?.reviews) ? item.reviews : []).map((r: any) => {
     const reply = typeof r?.responseFromOwnerText === "string" ? r.responseFromOwnerText.trim() : "";
     return {
-      stars: Math.max(1, Math.min(5, Math.round(num(r?.stars)))) || 0,
+      stars: (() => { const n = Math.round(num(r?.stars)); return n >= 1 && n <= 5 ? n : 0; })(), // sem nota válida = 0 (descartada abaixo)
       text: strOf(r?.text ?? r?.textTranslated, 700),
       date: iso(r?.publishedAtDate),
       replied: !!reply,

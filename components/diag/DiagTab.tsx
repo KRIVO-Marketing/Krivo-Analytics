@@ -46,8 +46,9 @@ export default function DiagTab() {
     } catch (err) { setFormErr((err as Error).message); } finally { setRunning(false); setStep(""); void load(); }
   };
   const open = async (id: string) => {
-    try { setView(await diagGet(id)); } catch (e) { setError((e as Error).message); }
+    try { setWarnings([]); setView(await diagGet(id)); } catch (e) { setError((e as Error).message); }
   };
+  const closeView = useCallback(() => setView(null), []);
   const remove = async (b: DiagBrief) => {
     if (!window.confirm(`Excluir o diagnóstico de ${b.business_name}?`)) return;
     try { await diagDelete(b.id); void load(); } catch (e) { setError((e as Error).message); }
@@ -99,7 +100,7 @@ export default function DiagTab() {
           </ul>
         </section>
       )}
-      {view && <ReportView data={view} warnings={warnings} onClose={() => { setView(null); }} />}
+      {view && <ReportView data={view} warnings={warnings} onClose={closeView} />}
     </div>
   );
 }

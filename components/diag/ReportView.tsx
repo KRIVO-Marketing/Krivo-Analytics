@@ -8,6 +8,9 @@ const PRIO: Record<string, string> = { alta: "Alta", media: "Média", baixa: "Ba
 const EFFORT: Record<string, string> = { baixo: "esforço baixo", medio: "esforço médio", alto: "esforço alto" };
 const dateBR = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
 const NAVY = "#232f52";
+const IG_ORDER = ["bio", "consistencia", "engajamento", "conteudo", "conversao"];
+const G_ORDER = ["perfil", "reputacao", "frescor", "respostas", "visibilidade"];
+const ordered = (o: Record<string, Dim>, order: string[]): Dim[] => [...order.filter((k) => o[k]).map((k) => o[k]), ...Object.keys(o).filter((k) => !order.includes(k)).map((k) => o[k])];
 
 function Ring({ score, size = 140 }: { score: number; size?: number }) {
   const r = size / 2 - 10, c = 2 * Math.PI * r;
@@ -92,8 +95,8 @@ export default function ReportView({ data, onClose, warnings = [] }: { data: Dia
   }, [d.business_name, onClose]);
   if (!rep) return null;
   const g = d.google;
-  const igDims: Dim[] = insta ? Object.values(insta.dimensions) : [];
-  const gDims: Dim[] = g ? Object.values(g.dimensions) : [];
+  const igDims: Dim[] = insta ? ordered(insta.dimensions as Record<string, Dim>, IG_ORDER) : [];
+  const gDims: Dim[] = g ? ordered(g.dimensions as Record<string, Dim>, G_ORDER) : [];
   const all = [...igDims.map((x) => ({ ...x, k: "instagram" as PillarKey })), ...gDims.map((x) => ({ ...x, k: "google" as PillarKey }))];
   const pct = (x: Dim) => x.score / x.max;
   const best = all.length ? [...all].sort((a, b) => pct(b) - pct(a))[0] : null;
