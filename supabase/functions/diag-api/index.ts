@@ -4,7 +4,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from "npm:jose@5";
 import { InstaError } from "../insta-api/insta.ts";
-import { collectPlace, computeGbp, GbpError, parseGoogleInput, scoreGbp, type GbpPlace } from "./gbp.ts";
+import { collectPlace, computeGbp, GbpError, generateGoogleAssets, parseGoogleInput, scoreGbp } from "./gbp.ts";
 import { buildReport, overallScore, PILLAR_LABELS, type PillarIn } from "./report.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
@@ -155,12 +155,17 @@ async function full(row: any) {
       insta = { ...data, username: prof?.username ?? row.instagram_username };
     }
   }
+  let assets: any[] = [];
+  if (row.insta_analysis_id) {
+    const { data } = await sb.from("insta_assets").select("id,kind,position,payload").eq("analysis_id", row.insta_analysis_id).order("kind").order("position").limit(400);
+    assets = data ?? [];
+  }
   const g = row.google ? { ...row.google, place: row.google.place ? { ...row.google.place, reviews: undefined } : null } : null;
-  return { report: { ...row, google: g }, insta };
+  return { report: { ...row, google: g }, insta, assets };
 }
 async function diagList() {
   const { data, error } = await sb.from("diag_reports")
-    .select("id,business_name,contact_id,instagram_username,google_input,status,overall_score,pillar_scores,created_at,finished_at")
+    .select("id,business_name,contact_id,instagram_username,google_input,status,overall_score,pillar_scores,created_at,finished_at,tier:report->>tier")
     .order("created_at", { ascending: false }).limit(300);
   if (error) throw dbErr("Erro ao ler os diagnósticos.");
   return { reports: data ?? [] };
@@ -211,8 +216,18 @@ async function diagRunGoogle(i: any, u: Member) {
   if (error) throw dbErr("Erro ao salvar a análise do Google.");
   return { ok: true, score: scoring.total_score };
 }
+async function diagGoogleAssets(i: any, u: Member) {
+  const row = await load(uuid(i.id, "ID do diagnóstico"));
+  if (!row.google?.place) throw bad("Este diagnóstico ainda não tem a análise do Google.");
+  await rateLimit(`diag-ga:${u.id}`, DIAG_LIMIT_HOUR);
+  const extras = await generateGoogleAssets(row.google.place, row.google.result?.summary ?? "", row.google.result?.reviews_insight ?? "");
+  const { error } = await sb.from("diag_reports").update({ google: { ...row.google, extras } }).eq("id", row.id);
+  if (error) throw dbErr("Erro ao salvar o pacote do Google.");
+  return { ok: true };
+}
 async function diagFinish(i: any, u: Member) {
   const row = await load(uuid(i.id, "ID do diagnóstico"));
+  const tier = i.tier === "completo" ? "completo" : "essencial";
   await rateLimit(`diag-f:${u.id}`, DIAG_LIMIT_HOUR);
   const pillars: PillarIn[] = [];
   if (row.insta_analysis_id) {
@@ -235,7 +250,7 @@ async function diagFinish(i: any, u: Member) {
   const { report, model } = await buildReport(row.business_name, pillars);
   const scores = Object.fromEntries(pillars.map((p) => [p.key, p.score]));
   const { error } = await sb.from("diag_reports").update({
-    report, overall_score: overallScore(pillars), pillar_scores: scores, status: "ready", model, finished_at: new Date().toISOString(),
+    report: { ...report, tier }, overall_score: overallScore(pillars), pillar_scores: scores, status: "ready", model, finished_at: new Date().toISOString(),
   }).eq("id", row.id);
   if (error) throw dbErr("Erro ao salvar o relatório.");
   return full(await load(row.id));
@@ -265,6 +280,7 @@ Deno.serve(async (req) => {
       case "diag_create": return json(await diagCreate(input, user), 201);
       case "diag_attach_instagram": return json(await diagAttachInstagram(input));
       case "diag_run_google": return json(await guard(() => diagRunGoogle(input, user)));
+      case "diag_google_assets": return json(await guard(() => diagGoogleAssets(input, user)));
       case "diag_finish": return json(await guard(() => diagFinish(input, user)));
       case "diag_delete": return json(await diagDelete(input));
     }

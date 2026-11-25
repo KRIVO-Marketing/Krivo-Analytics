@@ -163,7 +163,7 @@ strong, b { font-weight: 600; }
 .rpt-top p { font-size: 12px; color: #6b7280; text-align: center; }
 .rpt { max-width: 794px; margin: 18px auto; }
 .rpt-warn { max-width: 794px; margin: 14px auto 0; padding: 10px 14px; background: #fdf3dc; border: 1px solid #e8c777; border-radius: 10px; color: #6b4a07; font-size: 13px; }
-.rpt-page { background: #fff; padding: 44px 52px; margin-bottom: 16px; font-size: 13.5px; line-height: 1.55; box-shadow: 0 2px 14px rgba(22, 34, 68, 0.08); border-top: 6px solid #232f52; }
+.rpt-page, .rpt-flow { background: #fff; padding: 44px 52px; margin-bottom: 16px; font-size: 13.5px; line-height: 1.55; box-shadow: 0 2px 14px rgba(22, 34, 68, 0.08); border-top: 6px solid #232f52; }
 .rpt-brand { font-size: 12px; font-weight: 700; letter-spacing: 0.26em; color: #232f52; }
 .rpt h1 { font-size: 32px; line-height: 1.15; font-weight: 700; margin: 56px 0 14px; color: #1a2138; letter-spacing: -0.01em; }
 .rpt-rule { display: block; width: 76px; height: 4px; background: #232f52; margin-bottom: 36px; }
@@ -221,7 +221,18 @@ strong, b { font-weight: 600; }
 .rpt-next { background: #232f52; border-color: #232f52; color: #fff; margin-top: 28px; }
 .rpt-next .rpt-label { color: #aab4d4; } .rpt-next .rpt-h3 { color: #fff; font-size: 20px; } .rpt-next .rpt-p { color: #e6e9f5; } .rpt-next .rpt-muted { color: #aab4d4; }
 .rpt-note { margin-top: 22px; font-size: 11px; color: #8a90a2; }
-@media (max-width: 700px) { .rpt-page { padding: 24px 18px; } .rpt-hero { flex-direction: column; align-items: flex-start; } .rpt-exec { border-left: 0; padding-left: 0; } .rpt-rank { grid-template-columns: 1fr 1fr 44px; } .rpt-top p { display: none; } .rpt-meta { grid-template-columns: 1fr; } }
+.rpt-flow { border-top: 0; padding-top: 8px; margin-top: -16px; }
+.rpt-sec { margin-top: 28px; }
+.rpt-sec .rpt-h2 { break-after: avoid; }
+.rpt-badge-full { margin-left: 8px; background: #232f52; color: #fff; vertical-align: middle; }
+.rpt-item { border: 1px solid #e3e6ee; border-radius: 12px; padding: 12px 16px; margin: 10px 0; break-inside: avoid; }
+.rpt-pre { white-space: pre-wrap; }
+.rpt-list { margin: 6px 0 0 18px; padding: 0; list-style: disc; font-size: 13px; color: #2d3447; display: grid; gap: 4px; }
+.rpt-olist { list-style: decimal; }
+.rpt-week { margin-top: 18px; }
+.rpt-post { border-left: 3px solid #232f52; background: #f4f5f9; border-radius: 0 10px 10px 0; padding: 10px 14px; margin: 10px 0; break-inside: avoid; }
+.rpt-post p { margin: 2px 0; }
+@media (max-width: 700px) { .rpt-page, .rpt-flow { padding: 24px 18px; } .rpt-hero { flex-direction: column; align-items: flex-start; } .rpt-exec { border-left: 0; padding-left: 0; } .rpt-rank { grid-template-columns: 1fr 1fr 44px; } .rpt-top p { display: none; } .rpt-meta { grid-template-columns: 1fr; } }
 @media print {
   @page { size: A4; margin: 16mm 14mm 18mm; @bottom-left { content: "KRIVO® · Diagnóstico"; font-size: 9px; color: #8a90a2; } @bottom-right { content: "Página " counter(page) " de " counter(pages); font-size: 9px; color: #8a90a2; } }
   body.rpt-open > *:not(.rpt-root) { display: none !important; }
@@ -230,8 +241,11 @@ strong, b { font-weight: 600; }
   html, body { background: #fff !important; }
   .rpt-root { position: static; overflow: visible; background: #fff; }
   .rpt { max-width: none; margin: 0; }
-  .rpt-page { box-shadow: none; padding: 0; margin: 0; border-top: 0; break-after: page; }
-  .rpt-page:last-child { break-after: auto; }
+  .rpt-page, .rpt-flow { box-shadow: none; padding: 0; margin: 0; border-top: 0; }
+  .rpt-cover { break-after: page; }
+  .rpt-page + .rpt-page, .rpt-flow, .rpt-page + .rpt-flow { break-before: auto; }
+  .rpt-page { padding-top: 6mm; }
+  [id^="pilar-"], #prioridades { break-before: page; }
   .rpt * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
@@ -257,3 +271,5 @@ strong, b { font-weight: 600; }
 @keyframes ai-pulse { 0%, 100% { transform: scale(0.7); opacity: 0.6; } 50% { transform: scale(1.1); opacity: 1; } }
 @keyframes ai-fade { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .ai-orb-ring, .ai-orb-core, .ai-steps li[data-state="now"] .ai-dot { animation-duration: 3s; } .ai-tip { animation: none; } }
+.rpt-h2, .rpt-h3 { break-after: avoid; }
+.rpt-cards { break-inside: avoid; }

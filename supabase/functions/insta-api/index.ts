@@ -131,7 +131,7 @@ async function checkContact(v: unknown) {
 // ---------- Análise de Instagram (só admin) ----------
 // Coleta pública (Apify) + métricas calculadas em código + diagnóstico e materiais pela IA (Groq). Ver insta.ts.
 const INSTA_ASSET_STATUS = ["draft", "approved", "published", "discarded"];
-const INSTA_LIMIT_HOUR = { limit: 12, window: 3600 }; // protege o crédito da coleta e o uso da IA
+const INSTA_LIMIT_HOUR = { limit: 40, window: 3600 }; // protege o crédito da coleta e o uso da IA
 async function insta<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();

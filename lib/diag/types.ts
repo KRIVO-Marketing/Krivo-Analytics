@@ -1,12 +1,26 @@
 import { ApiError, diagCall } from "../api";
-import { instaAnalyze } from "../insta/types";
+import { instaAnalyze, instaCompare, instaGenerate } from "../insta/types";
 import type { AnalysisResult, Dimension } from "../insta/types";
+import type { InstaMetrics } from "../insta/metrics";
 
 export type PillarKey = "instagram" | "google";
 export const PILLAR_LABELS: Record<PillarKey, string> = { instagram: "Instagram", google: "Google Meu Negócio" };
 
 export type GoogleDimension = Dimension;
+export type GoogleAssets = {
+  description: string;
+  posts: { type: string; title: string; text: string; button: string; photo: string }[];
+  photos: { what: string; tip: string }[];
+  review_requests: { channel: string; text: string }[];
+  replies: { kind: string; text: string }[];
+  qa: { q: string; a: string }[];
+};
+export type Tier = "essencial" | "completo";
+export const TIER_LABEL: Record<Tier, string> = { essencial: "Essencial", completo: "Completo" };
+export type DiagAsset = { id: string; kind: "plan_post" | "bio" | "reel" | "sales_message"; position: number; payload: any };
+
 export type GoogleData = {
+  extras?: GoogleAssets;
   place: { name: string; category: string; city: string; address: string; rating: number | null; reviewsCount: number; photosCount: number; mapsUrl: string | null; website: string | null; phone: string | null } | null;
   metrics: {
     rating: number | null; reviewsCount: number; photosCount: number; sampleSize: number; repliedShare: number | null; negativeCount: number; negativeUnanswered: number;
@@ -18,19 +32,20 @@ export type GoogleData = {
 };
 export type Report = {
   verdict: string; summary: string;
+  tier?: Tier;
   top_problems: { pillar: PillarKey; title: string; detail: string }[];
   priorities: { priority: "alta" | "media" | "baixa"; pillar: PillarKey; title: string; action: string; impact: string; effort: "baixo" | "medio" | "alto" }[];
   product: { code: string; name: string; why: string };
 };
 export type DiagBrief = {
   id: string; business_name: string; contact_id: string | null; instagram_username: string | null; google_input: string | null;
-  status: "draft" | "ready"; overall_score: number | null; pillar_scores: Partial<Record<PillarKey, number>> | null; created_at: string; finished_at: string | null;
+  status: "draft" | "ready"; tier?: Tier | null; overall_score: number | null; pillar_scores: Partial<Record<PillarKey, number>> | null; created_at: string; finished_at: string | null;
 };
 export type DiagInsta = {
   id: string; username: string | null; total_score: number; dimensions: Record<string, Dimension>; result: AnalysisResult | null;
-  metrics: { followers?: number; postsPerWeek?: number | null; engagementMedianPct?: number | null } | null;
+  metrics: (InstaMetrics & { followers?: number }) | null; followers?: number;
 };
-export type DiagFull = { report: DiagBrief & { google: GoogleData | null; report: Report | null }; insta: DiagInsta | null };
+export type DiagFull = { report: DiagBrief & { google: GoogleData | null; report: Report | null }; insta: DiagInsta | null; assets?: DiagAsset[] };
 
 export const diagList = () => diagCall<{ reports: DiagBrief[] }>({ action: "diag_list" }).then((r) => r.reports);
 export const diagGet = (id: string) => diagCall<DiagFull>({ action: "diag_get", id });
@@ -48,7 +63,7 @@ async function withAiRetry<T>(fn: () => Promise<T>, step: (label: string) => voi
   }
 }
 
-export type RunInput = { business_name: string; contact_id: string | null; instagram_username: string; google_input: string };
+export type RunInput = { business_name: string; contact_id: string | null; instagram_username: string; google_input: string; tier: Tier; competitors: string[] };
 
 // O navegador conduz as etapas (cada uma cabe no tempo limite da função): Instagram, Google, síntese.
 // Se um pilar falhar, o relatório sai com os pilares que deram certo e o aviso aparece na tela.
@@ -59,24 +74,50 @@ export async function runDiagnostic(input: RunInput, step: (label: string) => vo
   });
   const warnings: string[] = [];
   let ok = 0;
+  let igAnalysisId: string | null = null;
+  let googleOk = false;
   if (report.instagram_username) {
     step("Analisando o Instagram… (cerca de 1 minuto)");
     try {
       const d = await withAiRetry(() => instaAnalyze({ username: report.instagram_username as string, contact_id: input.contact_id }), step, "Analisando o Instagram…");
       await diagCall({ action: "diag_attach_instagram", id: report.id, analysis_id: d.analysis.id });
+      igAnalysisId = d.analysis.id;
       ok++;
     } catch (e) { warnings.push(`Instagram: ${(e as Error).message}`); }
   }
   if (report.google_input) {
     step("Analisando o Google Meu Negócio e as avaliações… (cerca de 1 minuto)");
-    try { await withAiRetry(() => diagCall({ action: "diag_run_google", id: report.id }), step, "Analisando o Google Meu Negócio…"); ok++; } catch (e) { warnings.push(`Google Meu Negócio: ${(e as Error).message}`); }
+    try { await withAiRetry(() => diagCall({ action: "diag_run_google", id: report.id }), step, "Analisando o Google Meu Negócio…"); ok++; googleOk = true; } catch (e) { warnings.push(`Google Meu Negócio: ${(e as Error).message}`); }
   }
   if (!ok) {
     await diagDelete(report.id).catch(() => undefined);
     throw new Error(warnings.join(" · ") || "Não foi possível analisar nenhum pilar.");
   }
+  if (input.tier === "completo") {
+    // Pacote de execução: cada etapa é opcional. Se uma falhar, o relatório sai com o resto e o aviso aparece na tela.
+    const analysisId = igAnalysisId;
+    if (analysisId) {
+      const groups: ["plan" | "bios" | "reels" | "messages", string][] = [
+        ["plan", "Plano de conteúdo de 13 semanas…"], ["bios", "Bios prontas…"], ["reels", "Reels prontos para gravar…"], ["messages", "Mensagens que viram venda…"],
+      ];
+      for (const [g, label] of groups) {
+        step(label);
+        try { await withAiRetry(() => instaGenerate(analysisId, g), step, label); } catch (e) { warnings.push(`${label.replace("…", "")}: ${(e as Error).message}`); }
+      }
+      for (const c of input.competitors.slice(0, 2)) {
+        const label = `Comparando com @${c.replace(/^@/, "")}…`;
+        step(label);
+        try { await withAiRetry(() => instaCompare(analysisId, c), step, label); } catch (e) { warnings.push(`Comparação com ${c}: ${(e as Error).message}`); }
+      }
+    }
+    if (report.google_input && googleOk) {
+      const label = "Ideias de posts e pacote do Google…";
+      step(label);
+      try { await withAiRetry(() => diagCall({ action: "diag_google_assets", id: report.id }), step, label); } catch (e) { warnings.push(`Pacote do Google: ${(e as Error).message}`); }
+    }
+  }
   step("Montando o relatório…");
-  const full = await withAiRetry(() => diagCall<DiagFull>({ action: "diag_finish", id: report.id }), step, "Montando o relatório…");
+  const full = await withAiRetry(() => diagCall<DiagFull>({ action: "diag_finish", id: report.id, tier: input.tier }), step, "Montando o relatório…");
   return { full, warnings };
 }
 

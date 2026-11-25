@@ -101,6 +101,12 @@ export async function collectPlace(input: { kind: "url" | "search"; value: strin
   }
   if (res.status === 401 || res.status === 403) throw new GbpError(502, "coleta_credencial", "A chave da coleta foi recusada. Avise um administrador.");
   if (res.status === 402) throw new GbpError(502, "coleta_sem_credito", "O crédito da coleta acabou. Avise um administrador.");
+  if (res.status === 400) {
+    console.error("apify_gbp_status 400", (await res.text().catch(() => "")).slice(0, 300));
+    throw new GbpError(422, "busca_invalida", input.kind === "search"
+      ? "O Google não aceitou essa busca. Cole o link do Google Maps da empresa (mais confiável) ou informe nome + cidade."
+      : "O Google não aceitou esse link. Abra a empresa no Google Maps e copie o link de compartilhar.");
+  }
   if (!res.ok) {
     console.error("apify_gbp_status", res.status);
     throw new GbpError(502, "coleta_erro", "Não foi possível coletar o perfil do Google agora. Tente de novo em instantes.");
@@ -237,4 +243,49 @@ export async function scoreGbp(p: GbpPlace, m: GbpMetrics, ctx: { clientName?: s
   const user = `${ctx.clientName ? `Cliente da KRIVO: ${ctx.clientName}.\n\n` : ""}<dados>\n${JSON.stringify(data)}\n</dados>`;
   const j = await groqJson(SCORE_SYSTEM, user, 4500, (x) => void cleanGbp(x, m));
   return { scoring: cleanGbp(j, m), model: GROQ_MODEL };
+}
+
+// ---------- pacote de execução do Google (relatório Completo) ----------
+export type GoogleAssets = {
+  description: string;
+  posts: { type: string; title: string; text: string; button: string; photo: string }[];
+  photos: { what: string; tip: string }[];
+  review_requests: { channel: string; text: string }[];
+  replies: { kind: string; text: string }[];
+  qa: { q: string; a: string }[];
+};
+const ASSETS_SYSTEM = `${GBP_RULES}
+
+Tarefa: monte o pacote de execução da ficha do Google Meu Negócio, em texto final pronto para colar. Use só fatos presentes nos dados (nome, categoria, cidade, o que os clientes elogiam). Sem número, preço, prazo ou cliente inventado.
+- "description": descrição da empresa com até 740 caracteres, natural, com a categoria e a cidade, o que a empresa faz e o diferencial que aparece nas avaliações. Sem exageros ("o melhor", "garantido").
+- "posts": exatamente 12 ideias de postagem para a ficha (mix de "Novidade", "Oferta" e "Evento"), cada uma com "type", "title" (até 58 caracteres), "text" (até 300 caracteres, termina com convite à ação), "button" (um de: "Saiba mais", "Ligar agora", "Pedir", "Reservar", "Cadastrar") e "photo" (que foto usar).
+- "photos": 10 fotos para tirar e subir (o que fotografar e uma dica de enquadramento): fachada, interior, equipe, produto/serviço em uso, detalhes.
+- "review_requests": 3 mensagens para pedir avaliação (por WhatsApp após o atendimento, no balcão com QR code, por e-mail), curtas e educadas, sem oferecer benefício em troca.
+- "replies": 3 modelos de resposta a avaliações, com "kind" ("positiva 5 estrelas", "neutra 3 estrelas", "negativa 1 estrela"), personalizados ao negócio, citando o nome da empresa e convidando a continuar a conversa por um canal direto.
+- "qa": 5 perguntas e respostas para publicar na seção de perguntas da ficha (as dúvidas mais comuns deste tipo de negócio).
+Formato exato:
+{"description":"","posts":[{"type":"","title":"","text":"","button":"","photo":""}],"photos":[{"what":"","tip":""}],"review_requests":[{"channel":"","text":""}],"replies":[{"kind":"","text":""}],"qa":[{"q":"","a":""}]}`;
+
+function cleanAssets(j: any): GoogleAssets {
+  const arr = (v: unknown) => (Array.isArray(v) ? v : []);
+  const out: GoogleAssets = {
+    description: strOf(j?.description, 750),
+    posts: arr(j?.posts).slice(0, 12).map((x: any) => ({ type: strOf(x?.type, 20), title: strOf(x?.title, 70), text: strOf(x?.text, 320), button: strOf(x?.button, 20), photo: strOf(x?.photo, 160) })).filter((x) => x.title && x.text),
+    photos: arr(j?.photos).slice(0, 10).map((x: any) => ({ what: strOf(x?.what, 120), tip: strOf(x?.tip, 200) })).filter((x) => x.what),
+    review_requests: arr(j?.review_requests).slice(0, 3).map((x: any) => ({ channel: strOf(x?.channel, 60), text: strOf(x?.text, 400) })).filter((x) => x.text),
+    replies: arr(j?.replies).slice(0, 3).map((x: any) => ({ kind: strOf(x?.kind, 40), text: strOf(x?.text, 500) })).filter((x) => x.text),
+    qa: arr(j?.qa).slice(0, 5).map((x: any) => ({ q: strOf(x?.q, 160), a: strOf(x?.a, 400) })).filter((x) => x.q && x.a),
+  };
+  if (!out.description || out.posts.length < 6 || out.photos.length < 5) throw new Error("assets");
+  return out;
+}
+
+export async function generateGoogleAssets(p: GbpPlace, summary: string, insight: string): Promise<GoogleAssets> {
+  const data = {
+    empresa: { nome: p.name, categoria: p.category, categorias: p.categories, cidade: p.city, descricao_atual: p.description || null, site: p.website, telefone: !!p.phone },
+    diagnostico: { resumo: summary, o_que_os_clientes_dizem: insight },
+    avaliacoes_amostra: p.reviews.filter((r) => r.text).slice(0, 12).map((r) => ({ estrelas: r.stars, texto: trim(r.text.replace(/\s+/g, " "), 220) })),
+  };
+  const j = await groqJson(ASSETS_SYSTEM, `<dados>\n${JSON.stringify(data)}\n</dados>`, 6500, (x) => void cleanAssets(x), "low");
+  return cleanAssets(j);
 }

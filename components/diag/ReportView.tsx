@@ -1,6 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
+import { GoogleCompleto, InstaCompleto, InstaMetricCards, InstaSolutions } from "./ReportExtras";
 import { PILLAR_LABELS, scoreColor, scoreLabel, type DiagFull, type PillarKey } from "@/lib/diag/types";
 
 type Dim = { label: string; score: number; max: number; feedback: string; positives: string[]; improvements: string[] };
@@ -95,6 +96,7 @@ export default function ReportView({ data, onClose, warnings = [] }: { data: Dia
   }, [d.business_name, onClose]);
   if (!rep) return null;
   const g = d.google;
+  const completo = rep.tier === "completo";
   const igDims: Dim[] = insta ? ordered(insta.dimensions as Record<string, Dim>, IG_ORDER) : [];
   const gDims: Dim[] = g ? ordered(g.dimensions as Record<string, Dim>, G_ORDER) : [];
   const all = [...igDims.map((x) => ({ ...x, k: "instagram" as PillarKey })), ...gDims.map((x) => ({ ...x, k: "google" as PillarKey }))];
@@ -110,6 +112,7 @@ export default function ReportView({ data, onClose, warnings = [] }: { data: Dia
   const nPrio = ++n;
   const toc = [
     ["resumo", "Resumo e nota por pilar"], ...(insta ? [["pilar-instagram", "Instagram"]] : []), ...(g ? [["pilar-google", "Google Meu Negócio"]] : []),
+    ...(completo ? [["completo", "Plano de conteúdo, Reels, bios, mensagens e pacote do Google"]] : []),
     ["prioridades", "O que fazer agora"],
   ];
 
@@ -117,13 +120,13 @@ export default function ReportView({ data, onClose, warnings = [] }: { data: Dia
     <div className="rpt-root" role="dialog" aria-modal="true" aria-label={`Diagnóstico de ${d.business_name}`}>
       <div className="rpt-top no-print">
         <button type="button" className="btn" onClick={onClose}>← Voltar</button>
-        <p>Para salvar em PDF, escolha “Salvar como PDF” na janela de impressão.</p>
+        <p>Para salvar em PDF: “Salvar como PDF” na janela de impressão; desmarque “Cabeçalhos e rodapés”.</p>
         <button type="button" className="btn btn-primary" onClick={() => window.print()}>Baixar PDF</button>
       </div>
       {warnings.length > 0 && <div className="rpt-warn no-print" role="alert"><b>Parte do relatório ficou de fora:</b> {warnings.join(" · ")} Volte e gere de novo para incluir.</div>}
       <article className="rpt">
         <section className="rpt-page rpt-cover">
-          <p className="rpt-brand">KRIVO DIAGNÓSTICO</p>
+          <p className="rpt-brand">KRIVO DIAGNÓSTICO{completo ? " · COMPLETO" : ""}</p>
           <h1>Diagnóstico de Presença Digital</h1>
           <i className="rpt-rule" />
           <div className="rpt-who">
@@ -165,11 +168,9 @@ export default function ReportView({ data, onClose, warnings = [] }: { data: Dia
         </section>
 
         {insta && <Pillar n={nIg} k="instagram" score={insta.total_score} summary={insta.result?.summary ?? ""} dims={igDims}
-          facts={<>
-            {insta.metrics?.followers != null && <span><b>{insta.metrics.followers.toLocaleString("pt-BR")}</b> seguidores</span>}
-            {insta.metrics?.postsPerWeek != null && <span><b>{insta.metrics.postsPerWeek.toLocaleString("pt-BR")}</b> posts por semana</span>}
-            {insta.metrics?.engagementMedianPct != null && <span><b>{insta.metrics.engagementMedianPct.toLocaleString("pt-BR")}%</b> de engajamento (mediana)</span>}
-          </>} />}
+          facts={<>{insta.metrics?.followers != null && <span><b>{insta.metrics.followers.toLocaleString("pt-BR")}</b> seguidores</span>}</>}
+          extra={<InstaMetricCards m={insta.metrics} />} />}
+        {insta && <div className="rpt-flow"><InstaSolutions s={insta.result} />{completo && <InstaCompleto data={data} />}</div>}
         {g && <Pillar n={nG} k="google" score={g.total_score} summary={g.result.summary} dims={gDims}
           facts={<>
             {g.metrics.rating != null && <span><b>{g.metrics.rating.toLocaleString("pt-BR")}</b> de nota</span>}
@@ -183,6 +184,8 @@ export default function ReportView({ data, onClose, warnings = [] }: { data: Dia
             {g.result.reply_examples.length > 0 && <div className="rpt-panel"><p className="rpt-label">Como responder às avaliações</p>
               {g.result.reply_examples.map((x, i) => <div key={i} className="rpt-quote"><p><b>Avaliação:</b> “{x.review}”</p><p><b>Sugestão de resposta:</b> {x.suggested_reply}</p></div>)}</div>}
           </>} />}
+
+        {g && completo && g.extras && <div className="rpt-flow"><GoogleCompleto x={g.extras} /></div>}
 
         <section className="rpt-page" id="prioridades">
           <h2 className="rpt-h2">{nPrio}. O que fazer agora</h2>
