@@ -1,4 +1,4 @@
-import { diagCall } from "../api";
+import { ApiError, diagCall } from "../api";
 import { instaAnalyze } from "../insta/types";
 import type { AnalysisResult, Dimension } from "../insta/types";
 
@@ -36,6 +36,18 @@ export const diagList = () => diagCall<{ reports: DiagBrief[] }>({ action: "diag
 export const diagGet = (id: string) => diagCall<DiagFull>({ action: "diag_get", id });
 export const diagDelete = (id: string) => diagCall<{ ok: boolean }>({ action: "diag_delete", id });
 
+// Limite de uso da IA (por minuto): espera e tenta de novo, em vez de derrubar o diagnóstico.
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function withAiRetry<T>(fn: () => Promise<T>, step: (label: string) => void, label: string): Promise<T> {
+  for (let i = 0; ; i++) {
+    try { return await fn(); } catch (e) {
+      if (!(e instanceof ApiError) || e.code !== "ia_limite" || i >= 3) throw e;
+      for (let s = 45; s > 0; s--) { step(`A IA está no limite de uso por minuto. Retomando em ${s}s… (${label})`); await sleep(1000); }
+      step(label);
+    }
+  }
+}
+
 export type RunInput = { business_name: string; contact_id: string | null; instagram_username: string; google_input: string };
 
 // O navegador conduz as etapas (cada uma cabe no tempo limite da função): Instagram, Google, síntese.
@@ -50,21 +62,21 @@ export async function runDiagnostic(input: RunInput, step: (label: string) => vo
   if (report.instagram_username) {
     step("Analisando o Instagram… (cerca de 1 minuto)");
     try {
-      const d = await instaAnalyze({ username: report.instagram_username, contact_id: input.contact_id });
+      const d = await withAiRetry(() => instaAnalyze({ username: report.instagram_username as string, contact_id: input.contact_id }), step, "Analisando o Instagram…");
       await diagCall({ action: "diag_attach_instagram", id: report.id, analysis_id: d.analysis.id });
       ok++;
     } catch (e) { warnings.push(`Instagram: ${(e as Error).message}`); }
   }
   if (report.google_input) {
     step("Analisando o Google Meu Negócio e as avaliações… (cerca de 1 minuto)");
-    try { await diagCall({ action: "diag_run_google", id: report.id }); ok++; } catch (e) { warnings.push(`Google Meu Negócio: ${(e as Error).message}`); }
+    try { await withAiRetry(() => diagCall({ action: "diag_run_google", id: report.id }), step, "Analisando o Google Meu Negócio…"); ok++; } catch (e) { warnings.push(`Google Meu Negócio: ${(e as Error).message}`); }
   }
   if (!ok) {
     await diagDelete(report.id).catch(() => undefined);
     throw new Error(warnings.join(" · ") || "Não foi possível analisar nenhum pilar.");
   }
   step("Montando o relatório…");
-  const full = await diagCall<DiagFull>({ action: "diag_finish", id: report.id });
+  const full = await withAiRetry(() => diagCall<DiagFull>({ action: "diag_finish", id: report.id }), step, "Montando o relatório…");
   return { full, warnings };
 }
 

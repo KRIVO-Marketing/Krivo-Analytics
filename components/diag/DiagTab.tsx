@@ -78,8 +78,8 @@ export default function DiagTab() {
 
       {error && <ErrorBox message={error} onRetry={load} />}
       {list === null && !error && <p className="text-sm text-mute">Carregando…</p>}
-      {list && !list.length && <EmptyState title="Nenhum diagnóstico gerado ainda" hint="Preencha o formulário acima para gerar o primeiro." />}
-      {list && list.length > 0 && (
+      {list && !list.some((b) => b.status === "ready") && <EmptyState title="Nenhum diagnóstico gerado ainda" hint="Preencha o formulário acima para gerar o primeiro." />}
+      {list && list.some((b) => b.status === "ready") && (
         <section className="card p-2">
           <ul>
             {list.filter((b) => b.status === "ready").map((b) => (
