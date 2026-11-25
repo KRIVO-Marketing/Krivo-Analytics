@@ -42,7 +42,7 @@ async function withAiRetry<T>(fn: () => Promise<T>, step: (label: string) => voi
   for (let i = 0; ; i++) {
     try { return await fn(); } catch (e) {
       if (!(e instanceof ApiError) || e.code !== "ia_limite" || i >= 3) throw e;
-      for (let s = 45; s > 0; s--) { step(`A IA está no limite de uso por minuto. Retomando em ${s}s… (${label})`); await sleep(1000); }
+      for (let s = 65; s > 0; s--) { step(`A IA está no limite de uso por minuto. Retomando em ${s}s… (${label})`); await sleep(1000); }
       step(label);
     }
   }
