@@ -87,7 +87,7 @@
       "group": "Produtos",
       "key": "produtos",
       "label": "Produtos contratados",
-      "type": "multiselect:diagnostico|social|local|site|atende|metodologia",
+      "type": "multiselect:diagnostico|social|local|site|atende|metodologia|eventos",
       "default": [],
       "required": true,
       "help": "Metodologia liga Diagnóstico, Local, Site, Social e Atende. O app calcula produtos_lista e os blocos do Anexo I."
@@ -111,22 +111,14 @@
       "help": "Ex.: ou boleto bancário."
     },
     {
-      "group": "Pagamento",
-      "key": "indice_reajuste",
-      "label": "Índice de reajuste anual",
-      "type": "text",
-      "default": "IPCA",
-      "required": true,
-      "help": ""
-    },
-    {
       "group": "Vigência",
       "key": "data_inicio",
       "label": "Data de início",
       "type": "date_ptbr",
       "default": "",
       "required": true,
-      "help": "Formato: 25 de novembro de 2026."
+      "help": "Formato: 25 de novembro de 2026.",
+      "when": "mensal"
     },
     {
       "group": "Vigência",
@@ -135,7 +127,8 @@
       "type": "text",
       "default": "3 (três)",
       "required": true,
-      "help": "Fidelidade mínima de 3 meses."
+      "help": "Fidelidade mínima de 3 meses.",
+      "when": "mensal"
     },
     {
       "group": "Vigência",
@@ -144,7 +137,8 @@
       "type": "text",
       "default": "30 (trinta)",
       "required": true,
-      "help": ""
+      "help": "",
+      "when": "mensal"
     },
     {
       "group": "Vigência",
@@ -153,7 +147,8 @@
       "type": "text",
       "default": "as mensalidades restantes até o fim do prazo mínimo",
       "required": true,
-      "help": "Decisão dos sócios (cláusula 14.2)."
+      "help": "Decisão dos sócios (cláusula 14.2).",
+      "when": "mensal"
     },
     {
       "group": "Condições",
@@ -162,7 +157,8 @@
       "type": "bool",
       "default": true,
       "required": true,
-      "help": "Desmarcado = aprovação prévia dispensada (cláusulas 7.1 e 7.2 mudam)."
+      "help": "Desmarcado = aprovação prévia dispensada (cláusulas 7.1 e 7.2 mudam).",
+      "when": "padrao"
     },
     {
       "group": "Condições",
@@ -171,7 +167,8 @@
       "type": "text",
       "default": "2 (dois)",
       "required": true,
-      "help": ""
+      "help": "",
+      "when": "padrao"
     },
     {
       "group": "Condições",
@@ -180,7 +177,8 @@
       "type": "bool",
       "default": false,
       "required": false,
-      "help": ""
+      "help": "",
+      "when": "padrao"
     },
     {
       "group": "Condições",
@@ -189,7 +187,8 @@
       "type": "textarea",
       "default": "",
       "required": false,
-      "help": "Só se parceria = sim."
+      "help": "Só se parceria = sim.",
+      "when": "padrao"
     },
     {
       "group": "Diagnóstico",
@@ -282,6 +281,42 @@
       "help": ""
     },
     {
+      "group": "Eventos",
+      "key": "data_evento",
+      "label": "Data do evento",
+      "type": "date_ptbr",
+      "default": "",
+      "required": true,
+      "help": "A vigência vai do dia do evento até a entrega do material e o recebimento do pagamento."
+    },
+    {
+      "group": "Eventos",
+      "key": "evento_descricao",
+      "label": "Evento (nome e local)",
+      "type": "text",
+      "default": "",
+      "required": true,
+      "help": "Ex.: Festa de 10 anos da Casa X, no Espaço Y."
+    },
+    {
+      "group": "Eventos",
+      "key": "evento_entregas",
+      "label": "Entregas contratadas",
+      "type": "textarea",
+      "default": "",
+      "required": true,
+      "help": "Ex.: Stories ao vivo, 3 Reels no mesmo dia, aftermovie de 1 a 2 minutos e 50 fotos tratadas."
+    },
+    {
+      "group": "Eventos",
+      "key": "evento_prazo",
+      "label": "Prazo do aftermovie e das fotos",
+      "type": "text",
+      "default": "",
+      "required": false,
+      "help": "Ex.: até 7 dias úteis após o evento."
+    },
+    {
       "group": "Metodologia",
       "key": "metodologia_fases",
       "label": "Duração de cada fase",
@@ -298,7 +333,9 @@
     "local",
     "site",
     "atende",
-    "metodologia"
+    "metodologia",
+    "eventos",
+    "mensal"
   ],
-  "notes": "Blocos {#chave}...{/chave} são condicionais ou loops. produtos_lista e as chaves de produto (diagnostico, social, local, site, atende, metodologia) são calculadas pelo app a partir de 'produtos'."
+  "notes": "Blocos {#chave}...{/chave} são condicionais ou loops. produtos_lista e as chaves de produto (diagnostico, social, local, site, atende, metodologia, eventos) são calculadas pelo app a partir de 'produtos'."
 }

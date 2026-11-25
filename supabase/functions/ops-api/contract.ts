@@ -3,9 +3,19 @@
 
 export type FieldSpec = {
   group: string; key: string; label: string; type: string;
-  default: unknown; required: boolean; help: string;
+  default: unknown; required: boolean; help: string; when?: When;
 };
-export type Spec = { fields: FieldSpec[]; computed: string[] };
+// extra: produtos do catálogo que não têm bloco próprio no modelo (código -> nome). Entram na lista de produtos do contrato.
+// when: o campo só vale em certos contratos. Produtos pontuais (Eventos e Diagnóstico), sozinhos ou juntos, têm contrato mais simples:
+// a vigência vai até a entrega e o pagamento, sem prazo mínimo, aviso prévio, cancelamento, aprovação de peças nem parceria.
+// Qualquer produto recorrente no contrato (Social, Local, Site, Atende, Metodologia) volta ao padrão completo.
+export type When = "mensal" | "padrao";
+const PONTUAIS = ["eventos", "diagnostico"];
+export const onlyPontual = (selected: string[]) => selected.length > 0 && selected.every((k) => PONTUAIS.includes(k));
+export function fieldApplies(f: { when?: string }, selected: string[], _on?: Record<string, boolean>) {
+  return f.when ? !onlyPontual(selected) : true;
+}
+export type Spec = { fields: FieldSpec[]; computed: string[]; extra?: Record<string, string> };
 
 export class ContractError extends Error {
   problems: string[];
@@ -15,7 +25,7 @@ export class ContractError extends Error {
 // Chaves que lembram senha nunca são aceitas, em nenhum nível.
 const PASSWORD_KEY = /senha|password|passwd|pwd|secret|token/i;
 
-export const PRODUCT_KEYS = ["diagnostico", "social", "local", "site", "atende", "metodologia"] as const;
+export const PRODUCT_KEYS = ["diagnostico", "social", "local", "site", "atende", "metodologia", "eventos"] as const;
 export type ProductKey = (typeof PRODUCT_KEYS)[number];
 export const PRODUCT_NAMES: Record<ProductKey, string> = {
   diagnostico: "KRIVO Diagnóstico",
@@ -24,12 +34,13 @@ export const PRODUCT_NAMES: Record<ProductKey, string> = {
   site: "KRIVO Site",
   atende: "KRIVO Atende",
   metodologia: "Metodologia KRIVO",
+  eventos: "KRIVO Eventos",
 };
 // código do Catálogo <-> chave do contrato
-export const CODE_TO_KEY: Record<string, ProductKey> = { "00": "diagnostico", "01": "social", "02": "local", "03": "site", "04": "atende", "05": "metodologia" };
+export const CODE_TO_KEY: Record<string, ProductKey> = { "00": "diagnostico", "01": "social", "02": "local", "03": "site", "04": "atende", "05": "metodologia", "06": "eventos" };
 // grupo do formulário que só aparece se o produto estiver marcado
 export const GROUP_PRODUCT: Record<string, ProductKey> = {
-  "Diagnóstico": "diagnostico", "Social": "social", "Local": "local", "Site": "site", "Atende": "atende", "Metodologia": "metodologia",
+  "Diagnóstico": "diagnostico", "Social": "social", "Local": "local", "Site": "site", "Atende": "atende", "Metodologia": "metodologia", "Eventos": "eventos",
 };
 const METODOLOGIA_INCLUI: ProductKey[] = ["diagnostico", "local", "site", "social", "atende"];
 
@@ -227,11 +238,14 @@ export function activeProducts(selected: string[]): Record<ProductKey, boolean> 
   return on;
 }
 const joinPt = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} e ${xs[xs.length - 1]}`);
-export function productsList(selected: string[]) {
+export function productsList(selected: string[], extra: Record<string, string> = {}) {
   if (selected.includes("metodologia")) {
     return `${PRODUCT_NAMES.metodologia}, que inclui ${joinPt(METODOLOGIA_INCLUI.map((k) => PRODUCT_NAMES[k]))}`;
   }
-  return joinPt(PRODUCT_KEYS.filter((k) => selected.includes(k)).map((k) => PRODUCT_NAMES[k]));
+  return joinPt([
+    ...PRODUCT_KEYS.filter((k) => selected.includes(k)).map((k) => PRODUCT_NAMES[k]),
+    ...Object.keys(extra).filter((c) => selected.includes(c)).map((c) => extra[c]),
+  ]);
 }
 
 // ---------- valores padrão ----------
@@ -254,6 +268,7 @@ export function checkContract(raw: Record<string, unknown>, spec: Spec): Check {
     if (!f.required) continue;
     const prod = GROUP_PRODUCT[f.group];
     if (prod && !on[prod]) continue;
+    if (!fieldApplies(f, produtos, on)) continue;
     const v = d[f.key];
     const kind = parseType(f.type).kind;
     if (kind === "bool") continue;
@@ -275,15 +290,16 @@ export function checkContract(raw: Record<string, unknown>, spec: Spec): Check {
   if (s("email") && !EMAIL.test(s("email"))) errors.push("E-mail inválido.");
   const wa = digits(s("whatsapp"));
   if (s("whatsapp") && (wa.length < 10 || wa.length > 13)) errors.push("WhatsApp inválido: use DDD e número.");
-  if (s("data_inicio") && dateExtenso(s("data_inicio")) === s("data_inicio")) errors.push("Data de início inválida.");
+  if (fieldApplies({ when: "mensal" }, produtos, on) && s("data_inicio") && dateExtenso(s("data_inicio")) === s("data_inicio")) errors.push("Data de início inválida.");
 
   const pj = s("tipo_pessoa") === "pessoa jurídica";
   if (pj && s("doc_tipo") === "CPF") warnings.push("Pessoa jurídica com CPF: confira o tipo de documento.");
   if (!pj && s("doc_tipo") === "CNPJ") warnings.push("Pessoa física com CNPJ: confira o tipo de pessoa.");
   if (pj && !s("representante")) warnings.push("Pessoa jurídica: preencha o representante (nome, CPF e cargo).");
   if (d.solidaria === true && !s("representante")) warnings.push("Responsabilidade solidária só aparece no contrato se houver representante.");
-  if (d.parceria === true && !s("texto_parceria")) errors.push("Parceria marcada: escreva o texto da parceria.");
-  if (d.aprov_previa === true && !s("prazo_aprovacao")) errors.push("Informe o prazo de resposta às aprovações.");
+  const padrao = fieldApplies({ when: "padrao" }, produtos, on);
+  if (padrao && d.parceria === true && !s("texto_parceria")) errors.push("Parceria marcada: escreva o texto da parceria.");
+  if (padrao && d.aprov_previa === true && !s("prazo_aprovacao")) errors.push("Informe o prazo de resposta às aprovações.");
 
   // campos do Anexo I vazios deixam a frase incompleta
   for (const f of spec.fields) {
@@ -308,6 +324,9 @@ export function buildRenderData(raw: Record<string, unknown>, spec: Spec) {
   out.whatsapp = fmtPhone(s("whatsapp"));
   out.email = s("email").toLowerCase();
   out.data_inicio = dateExtenso(s("data_inicio"));
+  out.data_evento = dateExtenso(s("data_evento"));
+  out.mensal = fieldApplies({ when: "mensal" }, produtos, on);
+  const padrao = fieldApplies({ when: "padrao" }, produtos, on);
   out.parcelas = ((d.parcelas as Record<string, string>[]) ?? []).map((r) => ({
     item: (r.item ?? "").trim(),
     valor: moneyText(r.valor ?? ""),
@@ -316,10 +335,10 @@ export function buildRenderData(raw: Record<string, unknown>, spec: Spec) {
   }));
   out.representante = s("representante");
   out.solidaria = d.solidaria === true && !!s("representante");
-  out.aprov_previa = d.aprov_previa !== false;
-  out.parceria = d.parceria === true && !!s("texto_parceria");
+  out.aprov_previa = padrao && d.aprov_previa !== false; // só Eventos: cobertura em tempo real, sem aprovação prévia
+  out.parceria = padrao && d.parceria === true && !!s("texto_parceria");
   out.outra_forma = s("outra_forma");
-  out.produtos_lista = productsList(produtos);
+  out.produtos_lista = productsList(produtos, spec.extra);
   for (const k of PRODUCT_KEYS) out[k] = on[k];
   delete out.produtos;
   return out;

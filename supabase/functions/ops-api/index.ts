@@ -1006,7 +1006,7 @@ async function deliveriesList() {
 
 // pré-preenchimento do formulário a partir do contato e da entrega
 function contractPrefill(d: any, contact: any) {
-  const produtos = (d.product_codes as string[]).map((c) => CODE_TO_KEY[c]).filter(Boolean);
+  const produtos = (d.product_codes as string[]).map((c) => CODE_TO_KEY[c] ?? c);
   return {
     nome_contratante: contact?.company || contact?.name || "",
     tipo_pessoa: contact?.company ? "pessoa jurídica" : "pessoa física",
@@ -1096,7 +1096,7 @@ async function deliveryUpdate(i: any, u: Member) {
     p.started_at = v;
   }
   if (i.contract_data !== undefined) {
-    try { p.contract_data = cleanContractData(i.contract_data, SPEC); } catch (e) { contractError(e); }
+    try { p.contract_data = cleanContractData(i.contract_data, await contractSpec()); } catch (e) { contractError(e); }
   }
   const { data, error } = await sb.from("deliveries").update(p).eq("id", id).select().single();
   if (error) throw dbErr("Erro ao atualizar a entrega.");
@@ -1359,24 +1359,40 @@ async function contractTemplate() {
   templateCache = { path: doc.storage_path, updatedAt: doc.updated_at, buf };
   return buf;
 }
-function contractFields() {
-  return { fields: SPEC.fields, computed: SPEC.computed, product_codes: CODE_TO_KEY };
+// Produtos do contrato: os do modelo (fixos) + os que existirem no catálogo (ex.: KRIVO Eventos), sem precisar mexer no código.
+async function contractSpec(): Promise<Spec> {
+  const { data, error } = await sb.from("catalog_items").select("code,name").eq("kind", "product").not("code", "is", null).limit(100);
+  if (error) throw dbErr("Erro ao ler os produtos do catálogo.");
+  const extra: Record<string, string> = {};
+  for (const r of data ?? []) {
+    const code = String(r.code).trim();
+    if (code && !(code in CODE_TO_KEY)) extra[code] = String(r.name);
+  }
+  const fields = SPEC.fields.map((f) =>
+    f.key === "produtos" && Object.keys(extra).length ? { ...f, type: `${f.type}|${Object.keys(extra).join("|")}` } : f);
+  return { ...SPEC, fields, extra };
+}
+async function contractFields() {
+  const spec = await contractSpec();
+  return { fields: spec.fields, computed: spec.computed, product_codes: CODE_TO_KEY };
 }
 async function contractSave(i: any, u: Member) {
   const id = uuid(i.delivery_id, "ID da entrega");
   await getDelivery(id);
   let data: Record<string, unknown>;
-  try { data = cleanContractData(i.data, SPEC); } catch (e) { contractError(e); }
+  const spec = await contractSpec();
+  try { data = cleanContractData(i.data, spec); } catch (e) { contractError(e); }
   const { error } = await sb.from("deliveries").update({ contract_data: data!, updated_at: nowIso(), updated_by: u.id }).eq("id", id);
   if (error) throw dbErr("Erro ao salvar o rascunho do contrato.");
-  return { ok: true, check: checkContract(data!, SPEC), saved_at: nowIso() };
+  return { ok: true, check: checkContract(data!, spec), saved_at: nowIso() };
 }
 async function contractGenerate(i: any, u: Member) {
   const id = uuid(i.delivery_id, "ID da entrega");
   const d = await getDelivery(id);
+  const spec = await contractSpec();
   let data: Record<string, unknown>;
-  try { data = cleanContractData(i.data !== undefined ? i.data : d.contract_data, SPEC); } catch (e) { contractError(e); }
-  const check = checkContract(data!, SPEC);
+  try { data = cleanContractData(i.data !== undefined ? i.data : d.contract_data, spec); } catch (e) { contractError(e); }
+  const check = checkContract(data!, spec);
   if (check.errors.length) {
     const err = bad("Faltam dados para gerar o contrato.");
     err.details = check.errors;
@@ -1384,7 +1400,7 @@ async function contractGenerate(i: any, u: Member) {
   }
   const template = await contractTemplate();
   let out: Uint8Array;
-  try { out = renderDocx(PizZip, Docxtemplater, template, buildRenderData(data!, SPEC)); } catch (e) { contractError(e); }
+  try { out = renderDocx(PizZip, Docxtemplater, template, buildRenderData(data!, spec)); } catch (e) { contractError(e); }
   const fileName = contractFileName(String(data!.nome_contratante ?? d.title), todayIso());
   const path = `gerados/${id}/${crypto.randomUUID()}.docx`;
   const up = await sb.storage.from(BUCKET).upload(path, out!, { contentType: DOCX_MIME, upsert: false });
@@ -1511,7 +1527,7 @@ Deno.serve(async (req) => {
       case "docs_list": return json(await docsList());
       case "doc_url": return json(await docUrl(input));
       case "messages_list": return json(await messagesList());
-      case "contract_fields": return json(contractFields());
+      case "contract_fields": return json(await contractFields());
       case "contract_history": return json(await contractHistory(input));
       case "contract_url": return json(await contractUrl(input));
       // entrega: escrita (mesma regra das tarefas)

@@ -5,7 +5,7 @@ import { ApiError, opsCall } from "@/lib/api";
 import { fetchContractFields } from "@/lib/data";
 import { downloadUrl, PASSWORD_WARNING, productByKey, type FieldSpec } from "@/lib/delivery";
 import {
-  activeProducts, brl, buildRenderData, checkContract, dateExtenso, GROUP_PRODUCT, moneyText, parseMoney, validCNPJ, validCPF, type Spec,
+  activeProducts, brl, buildRenderData, checkContract, dateExtenso, fieldApplies, GROUP_PRODUCT, moneyText, parseMoney, validCNPJ, validCPF, type Spec,
 } from "@/supabase/functions/ops-api/contract";
 import { FormError } from "../opsui";
 import { Modal } from "../ui";
@@ -128,7 +128,11 @@ export function ContractForm({ deliveryId, saved, prefill, onClose, onSaved, onG
   if (loadErr) return <Modal title="Contrato" onClose={onClose} z={60}><FormError message={loadErr} /></Modal>;
   if (!spec) return <Modal title="Contrato" onClose={onClose} z={60}><div className="skeleton h-64" aria-busy="true" /></Modal>;
 
-  const groups = [...new Set(spec.fields.map((f) => f.group))].filter((g) => !GROUP_PRODUCT[g] || on[GROUP_PRODUCT[g] as keyof typeof on]);
+  const selected = (data.produtos as string[]) ?? [];
+  const visible = (f: FieldSpec) => fieldApplies(f, selected, on);
+  const groups = [...new Set(spec.fields.map((f) => f.group))].filter(
+    (g) => (!GROUP_PRODUCT[g] || on[GROUP_PRODUCT[g] as keyof typeof on]) && spec.fields.some((f) => f.group === g && visible(f)),
+  );
 
   return (
     <Modal title="Contrato" onClose={close} z={60} wide>
@@ -150,7 +154,7 @@ export function ContractForm({ deliveryId, saved, prefill, onClose, onSaved, onG
             {groups.map((g) => (
               <fieldset key={g} className="card space-y-4 p-4">
                 <legend className="px-1 text-sm font-semibold text-ink">{g}</legend>
-                {spec.fields.filter((f) => f.group === g).map((f) => (
+                {spec.fields.filter((f) => f.group === g && visible(f)).map((f) => (
                   <Field key={f.key} f={f} data={data} set={set} hasSite={!!on.site} />
                 ))}
               </fieldset>

@@ -7,7 +7,7 @@ export type Product = { code: string; key: string; name: string; short: string }
 export const BUNDLE_CODE = "05"; // Metodologia KRIVO: pacote que aplica os itens de 00 a 04
 export const METODOLOGIA_CODES = ["00", "01", "02", "03", "04"];
 // chave usada pelo modelo de contrato (só existe para os produtos que têm contrato)
-const CONTRACT_KEYS: Record<string, string> = { "00": "diagnostico", "01": "social", "02": "local", "03": "site", "04": "atende", "05": "metodologia" };
+const CONTRACT_KEYS: Record<string, string> = { "00": "diagnostico", "01": "social", "02": "local", "03": "site", "04": "atende", "05": "metodologia", "06": "eventos" };
 const toProduct = (code: string, name: string): Product => ({
   code,
   key: CONTRACT_KEYS[code] ?? code,
@@ -93,7 +93,7 @@ export function messageShortLabel(title: string) {
   return m ? m[1].charAt(0).toUpperCase() + m[1].slice(1) : title;
 }
 
-export type FieldSpec = { group: string; key: string; label: string; type: string; default: unknown; required: boolean; help: string };
+export type FieldSpec = { group: string; key: string; label: string; type: string; default: unknown; required: boolean; help: string; when?: "mensal" | "padrao" };
 export type ContractFieldsResponse = { fields: FieldSpec[]; computed: string[]; product_codes: Record<string, string> };
 
 // ---------- datas ----------
