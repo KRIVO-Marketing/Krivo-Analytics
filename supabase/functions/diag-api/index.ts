@@ -115,6 +115,15 @@ const optStr = (v: unknown, label: string, max: number) => {
   return s;
 };
 
+async function checkContact(v: unknown) {
+  if (v === undefined || v === null || v === "") return null;
+  const id = uuid(v, "Cliente");
+  const { data, error } = await sb.from("crm_contacts").select("id").eq("id", id).maybeSingle();
+  if (error) throw new AppError(500, "db", "Erro ao verificar o cliente.");
+  if (!data) throw new AppError(404, "nao_encontrado", "Cliente não encontrado.");
+  return id;
+}
+
 // ---------- Diagnóstico ----------
 const DIAG_LIMIT_HOUR = { limit: 20, window: 3600 }; // protege o crédito da coleta e o uso da IA
 async function guard<T>(fn: () => Promise<T>): Promise<T> {
