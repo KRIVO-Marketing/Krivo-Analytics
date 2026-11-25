@@ -6,6 +6,7 @@ import {
   type Asset, type AnalysisDetail, type InstaListItem,
 } from "@/lib/insta/types";
 import type { Contact } from "@/lib/ops";
+import AiLoader from "../AiLoader";
 import { EmptyState, FormError } from "../opsui";
 import { ErrorBox } from "../ui";
 
@@ -85,8 +86,9 @@ function AssetList({ title, kind, assets, busy, onGenerate }: {
     <section className="card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-ink">{title}{items.length ? ` · ${items.length}` : ""}</h3>
-        <button type="button" className="btn" onClick={onGenerate} disabled={busy}>{busy ? "Gerando… (até 1 min)" : items.length ? "Gerar de novo" : "Gerar"}</button>
+        <button type="button" className="btn" onClick={onGenerate} disabled={busy}>{busy ? "Gerando…" : items.length ? "Gerar de novo" : "Gerar"}</button>
       </div>
+      {busy && <AiLoader compact title="A IA está escrevendo… (até 1 min)" />}
       {!items.length && !busy && <p className="mt-2 text-sm text-mute">Ainda não gerado. Clique em Gerar para a IA montar com base no diagnóstico.</p>}
       {kind === "plan_post"
         ? weeks.map((w) => {
@@ -235,8 +237,9 @@ function Detail({ detail, onBack, onChange, onDeleted }: { detail: AnalysisDetai
         <h3 className="text-base font-semibold text-ink">Você vs. concorrentes</h3>
         <form className="flex flex-wrap gap-2" onSubmit={(e) => { e.preventDefault(); void compare(); }}>
           <input className="field !w-auto min-w-48 flex-1" placeholder="@concorrente" value={cmp} onChange={(e) => setCmp(e.target.value)} aria-label="@ do concorrente" maxLength={60} />
-          <button className="btn" disabled={busy === "cmp" || !cmp.trim()}>{busy === "cmp" ? "Analisando… (até 1 min)" : "Comparar"}</button>
+          <button className="btn" disabled={busy === "cmp" || !cmp.trim()}>{busy === "cmp" ? "Analisando…" : "Comparar"}</button>
         </form>
+        {busy === "cmp" && <AiLoader compact title="Comparando com o concorrente… (até 1 min)" />}
         {(r.comparisons ?? []).map((c) => (
           <div key={c.username} className="space-y-2 rounded-lg border border-line p-3 text-sm">
             <p className="font-medium text-ink">@{c.username} · {c.followers.toLocaleString("pt-BR")} seguidores · {c.stats.cadence.competitor ?? "—"} posts/sem (você {c.stats.cadence.user ?? "—"})</p>
@@ -307,7 +310,8 @@ export default function InstaTab() {
         </div>
         <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} /> É o perfil da própria KRIVO (uso interno)</label>
         <FormError message={formErr} />
-        <button className="btn btn-primary" disabled={running || !username.trim()}>{running ? "Analisando… não feche esta aba" : "Analisar perfil"}</button>
+        <button className="btn btn-primary" disabled={running || !username.trim()}>{running ? "Analisando…" : "Analisar perfil"}</button>
+        {running && <AiLoader title="Analisando o perfil do Instagram…" tips={["Buscando bio, seguidores e os últimos posts públicos.", "Calculando cadência, engajamento e mix de formatos em código.", "A IA dá a nota de 0 a 20 em cada dimensão e escreve o diagnóstico.", "Leva cerca de 1 minuto. Não feche esta aba."]} />}
       </form>
 
       {error && <ErrorBox message={error} onRetry={load} />}

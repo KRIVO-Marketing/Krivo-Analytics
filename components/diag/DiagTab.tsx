@@ -3,11 +3,23 @@ import { useCallback, useEffect, useState } from "react";
 import { fetchContacts } from "@/lib/data";
 import { PILLAR_LABELS, diagDelete, diagGet, diagList, runDiagnostic, scoreColor, type DiagBrief, type DiagFull, type PillarKey } from "@/lib/diag/types";
 import type { Contact } from "@/lib/ops";
+import AiLoader from "../AiLoader";
 import { EmptyState, FormError } from "../opsui";
 import { ErrorBox } from "../ui";
 import ReportView from "./ReportView";
 
 const ddmmyy = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
+
+// Etapas reais do diagnóstico; a etapa atual vem do texto que o runDiagnostic informa.
+function DiagProgress({ step, hasInsta, hasGoogle }: { step: string; hasInsta: boolean; hasGoogle: boolean }) {
+  const list = [hasInsta && { key: "Instagram", label: "Analisando o Instagram" }, hasGoogle && { key: "Google", label: "Analisando o Google Meu Negócio e as avaliações" }, { key: "Montando", label: "Montando o relatório" }].filter(Boolean) as { key: string; label: string }[];
+  const idx = Math.max(0, list.findIndex((x) => step.includes(x.key)));
+  const waiting = step.includes("limite") ? "A IA atingiu o limite de uso por minuto. Aguardando para continuar automaticamente, sem perder o que já foi feito." : null;
+  return (
+    <AiLoader title="Gerando o diagnóstico…" steps={list.map((x) => x.label)} current={idx} note={waiting}
+      tips={["Cada diagnóstico leva de 2 a 3 minutos.", "Os números (nota, % de respostas, posts por semana) são calculados em código.", "A IA escreve o texto e a ordem de prioridades.", "Não feche esta aba."]} />
+  );
+}
 
 export default function DiagTab() {
   const [list, setList] = useState<DiagBrief[] | null>(null);
@@ -72,7 +84,7 @@ export default function DiagTab() {
           <div><label className="label" htmlFor="dg-g">Google Meu Negócio (link do Maps, ou nome + cidade)</label><input id="dg-g" className="field" placeholder="https://maps.app.goo.gl/… ou Padaria Pão Quente, Curitiba" value={google} onChange={(e) => setGoogle(e.target.value)} maxLength={400} /></div>
         </div>
         <FormError message={formErr} />
-        {running && <p className="text-sm text-mute" role="status">{step || "Iniciando…"} Não feche esta aba.</p>}
+        {running && <DiagProgress step={step} hasInsta={!!insta.trim()} hasGoogle={!!google.trim()} />}
         <button className="btn btn-primary" disabled={running || !business.trim() || (!insta.trim() && !google.trim())}>{running ? "Gerando…" : "Gerar diagnóstico"}</button>
       </form>
       {warnings.length > 0 && <div className="card border-l-4 p-3 text-sm text-ink" role="alert" style={{ borderLeftColor: "#d97706" }}><b>Parte do relatório ficou de fora:</b> {warnings.join(" · ")}</div>}
