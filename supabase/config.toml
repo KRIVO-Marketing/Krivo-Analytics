@@ -1,0 +1,12 @@
+# A autenticação é feita dentro de cada função (Bearer + permissão de sócio), então o gateway não valida o JWT.
+# Sem isso, o pedido de pré-verificação (OPTIONS) do navegador é barrado e aparece "Não foi possível falar com o servidor".
+[functions.diag-api]
+verify_jwt = false
+[functions.insta-api]
+verify_jwt = false
+[functions.ops-api]
+verify_jwt = false
+[functions.ga4-api]
+verify_jwt = false
+[functions.ai-chat]
+verify_jwt = false
