@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchContacts } from "@/lib/data";
 import {
-  DIM_ORDER, GOALS, PAINS, instaAnalyze, instaAssetStatus, instaCompare, instaDelete, instaGenerate, instaGet, instaList, scoreTone,
-  type Asset, type AssetStatus, type AnalysisDetail, type InstaListItem,
+  DIM_ORDER, GOALS, PAINS, instaAnalyze, instaCompare, instaDelete, instaGenerate, instaGet, instaList, scoreTone,
+  type Asset, type AnalysisDetail, type InstaListItem,
 } from "@/lib/insta/types";
 import type { Contact } from "@/lib/ops";
 import { EmptyState, FormError } from "../opsui";
@@ -11,7 +11,6 @@ import { ErrorBox } from "../ui";
 
 const ddmmyy = (iso: string) => new Date(iso).toLocaleDateString("pt-BR");
 const FORMAT_LABEL: Record<string, string> = { video: "Reels", carousel: "Carrossel", image: "Foto" };
-const STATUS_LABEL: Record<AssetStatus, string> = { draft: "Rascunho", approved: "Aprovado", published: "Publicado", discarded: "Descartado" };
 
 function CopyButton({ text, label = "Copiar" }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -45,8 +44,8 @@ function Metric({ label, value, sub }: { label: string; value: string; sub?: str
 }
 
 // ---------- material gerado (plano, bios, Reels, mensagens) ----------
-function AssetList({ title, kind, assets, busy, onGenerate, onStatus }: {
-  title: string; kind: Asset["kind"]; assets: Asset[]; busy: boolean; onGenerate: () => void; onStatus: (a: Asset, s: AssetStatus) => void;
+function AssetList({ title, kind, assets, busy, onGenerate }: {
+  title: string; kind: Asset["kind"]; assets: Asset[]; busy: boolean; onGenerate: () => void;
 }) {
   const items = assets.filter((a) => a.kind === kind);
   const textOf = (a: Asset) => {
@@ -58,8 +57,8 @@ function AssetList({ title, kind, assets, busy, onGenerate, onStatus }: {
   const weeks = kind === "plan_post" ? [...new Set(items.map((a) => a.payload.week as number))] : [];
   const row = (a: Asset) => (
     <li key={a.id} className="rounded-lg border border-line p-3">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col items-start gap-2 sm:flex-row sm:justify-between">
+        <div className="min-w-0 w-full flex-1 sm:w-auto">
           {kind === "plan_post" && <p className="text-xs text-mute">{a.payload.day} · {a.payload.time} · {a.payload.format}</p>}
           {kind === "bio" && <p className="text-xs uppercase tracking-wider text-mute">{a.payload.angle}</p>}
           {kind === "sales_message" && <p className="text-xs uppercase tracking-wider text-mute">{a.payload.channel}</p>}
@@ -77,9 +76,6 @@ function AssetList({ title, kind, assets, busy, onGenerate, onStatus }: {
           </>)}
         </div>
         <div className="flex items-center gap-2">
-          <select aria-label="Situação" className="field !w-auto" value={a.status} onChange={(e) => onStatus(a, e.target.value as AssetStatus)}>
-            {(Object.keys(STATUS_LABEL) as AssetStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-          </select>
           <CopyButton text={textOf(a)} />
         </div>
       </div>
@@ -125,11 +121,7 @@ function Detail({ detail, onBack, onChange, onDeleted }: { detail: AnalysisDetai
       onChange({ ...detail, assets: [...detail.assets.filter((x) => x.kind !== res.kind), ...res.assets] });
     } catch (e) { setErr((e as Error).message); } finally { setBusy(null); }
   };
-  const setStatus = async (asset: Asset, status: AssetStatus) => {
-    const prev = detail.assets;
-    onChange({ ...detail, assets: prev.map((x) => (x.id === asset.id ? { ...x, status } : x)) });
-    try { await instaAssetStatus(asset.id, status); } catch (e) { onChange({ ...detail, assets: prev }); setErr((e as Error).message); }
-  };
+
   const compare = async () => {
     if (!cmp.trim()) return;
     setBusy("cmp"); setErr(null);
@@ -255,10 +247,10 @@ function Detail({ detail, onBack, onChange, onDeleted }: { detail: AnalysisDetai
         ))}
       </section>
 
-      <AssetList title="Plano de conteúdo · 13 semanas" kind="plan_post" assets={detail.assets} busy={busy === "plan"} onGenerate={() => generate("plan")} onStatus={setStatus} />
-      <AssetList title="Bios prontas" kind="bio" assets={detail.assets} busy={busy === "bios"} onGenerate={() => generate("bios")} onStatus={setStatus} />
-      <AssetList title="Reels prontos para gravar" kind="reel" assets={detail.assets} busy={busy === "reels"} onGenerate={() => generate("reels")} onStatus={setStatus} />
-      <AssetList title="Mensagens que viram venda" kind="sales_message" assets={detail.assets} busy={busy === "messages"} onGenerate={() => generate("messages")} onStatus={setStatus} />
+      <AssetList title="Plano de conteúdo · 13 semanas" kind="plan_post" assets={detail.assets} busy={busy === "plan"} onGenerate={() => generate("plan")} />
+      <AssetList title="Bios prontas" kind="bio" assets={detail.assets} busy={busy === "bios"} onGenerate={() => generate("bios")} />
+      <AssetList title="Reels prontos para gravar" kind="reel" assets={detail.assets} busy={busy === "reels"} onGenerate={() => generate("reels")} />
+      <AssetList title="Mensagens que viram venda" kind="sales_message" assets={detail.assets} busy={busy === "messages"} onGenerate={() => generate("messages")} />
     </div>
   );
 }
