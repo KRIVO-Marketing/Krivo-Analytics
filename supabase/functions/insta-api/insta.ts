@@ -103,7 +103,7 @@ export function parseJson(s: string): any {
   return JSON.parse(t.slice(a, b + 1));
 }
 
-async function groqOnce(system: string, user: string, maxTokens: number, effort: "low" | "medium"): Promise<any> {
+async function groqOnce(system: string, user: string, maxTokens: number, effort: "low" | "medium", jsonMode = true): Promise<any> {
   const key = Deno.env.get("GROQ_API_KEY") ?? "";
   if (!key) throw new InstaError(503, "ia_indisponivel", "A IA ainda não foi configurada neste ambiente. Avise um administrador.");
   const ctrl = new AbortController();
@@ -119,7 +119,7 @@ async function groqOnce(system: string, user: string, maxTokens: number, effort:
         temperature: 0.4,
         max_completion_tokens: maxTokens,
         reasoning_effort: effort,
-        response_format: { type: "json_object" },
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
       signal: ctrl.signal,
     });
@@ -130,6 +130,12 @@ async function groqOnce(system: string, user: string, maxTokens: number, effort:
     clearTimeout(timer);
   }
   if (res.status === 429) throw new InstaError(429, "ia_limite", "A IA está no limite de uso agora. Aguarde um minuto e tente de novo.", 30);
+  if (res.status === 400) {
+    // Geralmente "falha ao gerar JSON válido": é pontual, então volta como erro comum para o groqJson tentar de novo.
+    const t = await res.text().catch(() => "");
+    console.error("groq_status 400", t.slice(0, 300));
+    throw new Error("groq_400");
+  }
   if (!res.ok) {
     console.error("groq_status", res.status);
     throw new InstaError(502, "ia_erro", "A IA não conseguiu responder agora. Tente de novo em instantes.");
@@ -146,9 +152,9 @@ const hasPlaceholder = (v: unknown) => PLACEHOLDER.test(JSON.stringify(v));
 
 export async function groqJson(system: string, user: string, maxTokens: number, check: (j: any) => void, effort: "low" | "medium" = "medium"): Promise<any> {
   let note = "";
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const j = await groqOnce(system, user + note, maxTokens, effort);
+      const j = await groqOnce(system, user + note, maxTokens, effort, attempt < 2); // na última tentativa, sem o modo JSON estrito
       check(j);
       if (hasPlaceholder(j)) throw new Error("placeholder");
       return j;

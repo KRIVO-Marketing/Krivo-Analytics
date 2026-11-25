@@ -99,7 +99,7 @@ export default function DiagTab() {
           </ul>
         </section>
       )}
-      {view && <ReportView data={view} onClose={() => setView(null)} />}
+      {view && <ReportView data={view} warnings={warnings} onClose={() => { setView(null); }} />}
     </div>
   );
 }

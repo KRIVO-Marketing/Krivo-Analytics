@@ -79,7 +79,7 @@ function Pillar({ n, k, score, summary, dims, facts, extra }: { n: number; k: Pi
   );
 }
 
-export default function ReportView({ data, onClose }: { data: DiagFull; onClose: () => void }) {
+export default function ReportView({ data, onClose, warnings = [] }: { data: DiagFull; onClose: () => void; warnings?: string[] }) {
   const { report: d, insta } = data;
   const rep = d.report;
   useEffect(() => {
@@ -117,6 +117,7 @@ export default function ReportView({ data, onClose }: { data: DiagFull; onClose:
         <p>Para salvar em PDF, escolha “Salvar como PDF” na janela de impressão.</p>
         <button type="button" className="btn btn-primary" onClick={() => window.print()}>Baixar PDF</button>
       </div>
+      {warnings.length > 0 && <div className="rpt-warn no-print" role="alert"><b>Parte do relatório ficou de fora:</b> {warnings.join(" · ")} Volte e gere de novo para incluir.</div>}
       <article className="rpt">
         <section className="rpt-page rpt-cover">
           <p className="rpt-brand">KRIVO DIAGNÓSTICO</p>
