@@ -10,6 +10,7 @@ import CatalogTab from "./catalog/CatalogTab";
 import DeliveryTab from "./delivery/DeliveryTab";
 import FinanceTab from "./finance/FinanceTab";
 import InstaTab from "./insta/InstaTab";
+import DiagTab from "./diag/DiagTab";
 import HomeTab from "./home/HomeTab";
 import ClientsTab from "./ClientsTab";
 import CrmTab from "./CrmTab";
@@ -35,6 +36,7 @@ const BASE_GROUPS = [
   {
     title: "Análise",
     items: [
+      { id: "diagnostico", label: "Diagnóstico", sub: "Relatório KRIVO Diagnóstico: Instagram + Google Meu Negócio, em PDF" },
       { id: "instagram", label: "Análise IA", sub: "Nota, diagnóstico e plano de conteúdo de Instagram" },
       { id: "krivo", label: "KRIVO", sub: "Meta de lucro e performance própria" },
       { id: "clientes", label: "Métricas", sub: "Propriedades GA4 e resultados de clientes" },
@@ -51,7 +53,7 @@ const ADMIN_GROUP = {
   ],
 } as const;
 
-type TabId = "home" | "tarefas" | "crm" | "entrega" | "krivo" | "clientes" | "caixa" | "instagram" | "catalogo" | "equipe";
+type TabId = "home" | "tarefas" | "crm" | "entrega" | "krivo" | "clientes" | "caixa" | "instagram" | "diagnostico" | "catalogo" | "equipe";
 
 function TabIcon({ id }: { id: TabId }) {
   const props = {
@@ -82,6 +84,8 @@ function TabIcon({ id }: { id: TabId }) {
       return <svg {...props}><rect x="2.5" y="6" width="19" height="13" rx="3" /><path d="M2.5 10h19" /><circle cx="16.5" cy="14.5" r="1.5" /></svg>;
     case "instagram":
       return <svg {...props}><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.2" cy="6.8" r="1" fill="currentColor" /></svg>;
+    case "diagnostico":
+      return <svg {...props}><path d="M6 3h9l4 4v14H6Z" /><path d="M14 3v5h5" /><path d="m9 15 2 2 4-4.5" /></svg>;
     case "catalogo":
       return <svg {...props}><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z" /><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" /></svg>;
     case "equipe":
@@ -121,7 +125,7 @@ export default function App() {
   const groups = isAdmin ? [...BASE_GROUPS, ADMIN_GROUP] : [...BASE_GROUPS];
   const tabs = groups.flatMap((g) => [...g.items]);
   const [tab, setTab] = useState<TabId>("home");
-  const [visited, setVisited] = useState<Record<TabId, boolean>>({ home: true, tarefas: false, crm: false, entrega: false, krivo: false, clientes: false, caixa: false, instagram: false, catalogo: false, equipe: false });
+  const [visited, setVisited] = useState<Record<TabId, boolean>>({ home: true, tarefas: false, crm: false, entrega: false, krivo: false, clientes: false, caixa: false, instagram: false, diagnostico: false, catalogo: false, equipe: false });
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
   const counts = useNavCounts();
 
@@ -269,6 +273,7 @@ export default function App() {
           <div role="tabpanel" id="panel-tarefas" aria-labelledby="tab-tarefas" hidden={tab !== "tarefas"}>{visited.tarefas && <TasksTab />}</div>
           <div role="tabpanel" id="panel-crm" aria-labelledby="tab-crm" hidden={tab !== "crm"}>{visited.crm && <CrmTab />}</div>
           <div role="tabpanel" id="panel-entrega" aria-labelledby="tab-entrega" hidden={tab !== "entrega"}>{visited.entrega && <DeliveryTab />}</div>
+          <div role="tabpanel" id="panel-diagnostico" aria-labelledby="tab-diagnostico" hidden={tab !== "diagnostico"}>{visited.diagnostico && <DiagTab />}</div>
           <div role="tabpanel" id="panel-instagram" aria-labelledby="tab-instagram" hidden={tab !== "instagram"}>{visited.instagram && <InstaTab />}</div>
           <div role="tabpanel" id="panel-krivo" aria-labelledby="tab-krivo" hidden={tab !== "krivo"}>{visited.krivo && <KrivoTab />}</div>
           <div role="tabpanel" id="panel-clientes" aria-labelledby="tab-clientes" hidden={tab !== "clientes"}>{visited.clientes && <ClientsTab />}</div>

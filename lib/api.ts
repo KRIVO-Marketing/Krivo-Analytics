@@ -5,6 +5,7 @@ import { getAuth } from "./auth";
 export const BASE_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ga4-api";
 export const OPS_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ops-api";
 export const INSTA_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/insta-api";
+export const DIAG_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/diag-api";
 export const AI_URL = "https://mpfvpngfltmgrmjbibce.supabase.co/functions/v1/ai-chat";
 
 export class ApiError extends Error {
@@ -66,6 +67,9 @@ export const opsCall = <T,>(body: Record<string, unknown>, signal?: AbortSignal)
 
 // Análise de Instagram com IA (função insta-api, só administradores). Chamadas longas: coleta + IA.
 export const instaCall = <T,>(body: Record<string, unknown>, signal?: AbortSignal) => call<T>(body, signal, INSTA_URL);
+
+// KRIVO Diagnóstico (função diag-api, só administradores). Chamadas longas: coleta + IA.
+export const diagCall = <T,>(body: Record<string, unknown>, signal?: AbortSignal) => call<T>(body, signal, DIAG_URL);
 
 // Chat de IA (função ai-chat). O navegador envia só as mensagens; o contexto é montado no servidor.
 export const aiCall = <T,>(body: Record<string, unknown>, signal?: AbortSignal) => call<T>(body, signal, AI_URL);
