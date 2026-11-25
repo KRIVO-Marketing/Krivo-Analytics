@@ -293,7 +293,7 @@ export default function App() {
       <div
         role="tablist"
         aria-label="Seções"
-        className={`fixed inset-x-0 bottom-0 z-40 grid ${isAdmin ? "grid-cols-10" : "grid-cols-7"} border-t border-line bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md lg:hidden`}
+        className="fixed inset-x-0 bottom-0 z-40 flex snap-x snap-proximity overflow-x-auto overscroll-x-contain border-t border-line bg-card/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-md [-ms-overflow-style:none] [scrollbar-width:none] lg:hidden [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((t, i) => {
           const active = tab === t.id;
@@ -307,9 +307,12 @@ export default function App() {
               aria-selected={active}
               aria-controls={`panel-${t.id}`}
               tabIndex={active ? 0 : -1}
-              onClick={() => select(t.id)}
+              onClick={(e) => {
+                select(t.id);
+                e.currentTarget.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+              }}
               onKeyDown={(e) => onKey(e, i)}
-              className={`relative flex min-h-15 flex-col items-center justify-center gap-0.5 px-0.5 py-1.5 text-[10px] font-medium transition ${
+              className={`relative flex min-h-16 w-[72px] shrink-0 snap-center flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-medium leading-tight whitespace-nowrap transition ${
                 active ? "text-accent" : "text-mute hover:text-ink"
               }`}
             >
