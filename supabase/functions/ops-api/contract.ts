@@ -378,8 +378,8 @@ export function leftoverTags(PizZip: Ctor, buf: Uint8Array): string[] {
   return [...new Set(found)].slice(0, 10);
 }
 
-// "Contrato KRIVO - Barbearia X - 2026-11-25.docx"
+// "Contrato KRIVO - Barbearia X - 2026-11-25.pdf"
 export function contractFileName(name: string, isoDate: string) {
   const safe = name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 80) || "Cliente";
-  return `Contrato KRIVO - ${safe} - ${isoDate}.docx`;
+  return `Contrato KRIVO - ${safe} - ${isoDate}.pdf`;
 }

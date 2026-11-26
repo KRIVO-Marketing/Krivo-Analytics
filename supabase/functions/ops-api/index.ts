@@ -5,10 +5,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, decodeProtectedHeader, jwtVerify } from "npm:jose@5";
 import PizZip from "npm:pizzip@3.3.0";
 import Docxtemplater from "npm:docxtemplater@3.71.1";
+import * as pdfLib from "npm:pdf-lib@1.17.1";
+import fontkit from "npm:@pdf-lib/fontkit@1.1.1";
 import CONTRACT_SPEC from "./contract-fields.json" with { type: "json" };
 import {
   buildRenderData, checkContract, cleanContractData, CODE_TO_KEY, ContractError, contractFileName, renderDocx, type Spec,
 } from "./contract.ts";
+import { docxToPdf } from "./docx-pdf.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!.replace(/\/+$/, "");
 const ISSUER = `${SUPABASE_URL}/auth/v1`;
@@ -1400,10 +1403,13 @@ async function contractGenerate(i: any, u: Member) {
   }
   const template = await contractTemplate();
   let out: Uint8Array;
-  try { out = renderDocx(PizZip, Docxtemplater, template, buildRenderData(data!, spec)); } catch (e) { contractError(e); }
   const fileName = contractFileName(String(data!.nome_contratante ?? d.title), todayIso());
-  const path = `gerados/${id}/${crypto.randomUUID()}.docx`;
-  const up = await sb.storage.from(BUCKET).upload(path, out!, { contentType: DOCX_MIME, upsert: false });
+  try {
+    const docx = renderDocx(PizZip, Docxtemplater, template, buildRenderData(data!, spec));
+    out = await docxToPdf({ PizZip, pdfLib, fontkit }, docx, { title: fileName.replace(/\.pdf$/, ""), date: todayIso() });
+  } catch (e) { contractError(e); }
+  const path = `gerados/${id}/${crypto.randomUUID()}.pdf`;
+  const up = await sb.storage.from(BUCKET).upload(path, out!, { contentType: DOC_KINDS.pdf.mime, upsert: false });
   if (up.error) throw dbErr("Erro ao guardar o contrato gerado.");
   const { data: rec, error } = await sb.from("delivery_contracts").insert({
     delivery_id: id, data: data!, file_name: fileName, storage_path: path, size_bytes: out!.byteLength, generated_by: u.id,

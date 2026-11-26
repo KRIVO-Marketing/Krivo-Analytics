@@ -170,7 +170,7 @@ export function ContractForm({ deliveryId, saved, prefill, onClose, onSaved, onG
 
         {done && (
           <div role="status" className="rounded-xl border border-[var(--pos)]/40 bg-[var(--pos-soft)] p-3 text-sm">
-            <p className="font-medium text-ink">Contrato gerado: {done.file}</p>
+            <p className="break-words font-medium text-ink">Contrato gerado: {done.file}</p>
             <p className="text-mute">O download começou. Confira o arquivo antes de enviar para assinatura.</p>
             {done.warnings.length > 0 && <ul className="mt-1 list-disc pl-5 text-mute">{done.warnings.map((w) => <li key={w}>{w}</li>)}</ul>}
           </div>
@@ -183,7 +183,7 @@ export function ContractForm({ deliveryId, saved, prefill, onClose, onSaved, onG
           {step === "form" && <button type="button" className="btn" onClick={() => setStep("preview")}>Pré-visualizar</button>}
           <button type="button" className="btn btn-primary" onClick={generate} disabled={generating || check.errors.length > 0}
             title={check.errors.length ? "Corrija os itens em vermelho para gerar" : undefined}>
-            {generating ? "Gerando…" : "Gerar contrato (Word)"}
+            {generating ? "Gerando…" : "Gerar contrato (PDF)"}
           </button>
         </div>
       </div>

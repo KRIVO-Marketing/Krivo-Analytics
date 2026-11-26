@@ -20,3 +20,10 @@ A tabela `delivery_docs` guarda título, descrição e caminho de cada arquivo. 
    O script pode ser rodado de novo: ele substitui os arquivos e atualiza `updated_at`.
 
 Depois disso, administradores podem substituir qualquer modelo pela própria plataforma (aba Entrega > Modelos).
+
+### Contrato em PDF
+
+A aba Entrega gera o contrato em PDF dentro da função `ops-api`, sem serviço externo. O **texto** vem do
+`KRIVO_Contrato-template.docx` preenchido; a **aparência** (capa, fontes, cláusulas, tabelas e assinaturas) é
+definida em `supabase/functions/ops-api/docx-pdf.ts`. Mudar fonte, cor ou espaçamento no Word não altera o PDF.
+Imagem, lista automática ou cabeçalho no modelo fazem a geração falhar com um aviso, para nada sumir do contrato.
